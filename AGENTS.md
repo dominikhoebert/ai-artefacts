@@ -2,7 +2,7 @@
 
 ## Project type
 
-Static HTML/SVG visualization files for ESP32 breadboard circuits. **No build system, no dependencies, no package manager.**
+Static HTML/SVG visualization files — a collection of AI-generated artefacts. **No build system, no dependencies, no package manager.**
 
 ## Entry point
 
@@ -12,7 +12,7 @@ Static HTML/SVG visualization files for ESP32 breadboard circuits. **No build sy
 ## How to work with files
 
 - Each `.html` file is **standalone** – open directly in a browser, no server needed
-- `index.html` loads SVGs via `fetch()` and renders them inline as thumbnails + modals
+- `index.html` renders SVGs inline (works with `file://` protocol, no fetch/CORS issues)
 - No compilation, bundling, or preprocessing required
 
 ## Language

@@ -1,7 +1,7 @@
 # ai-artefacts
 
-Interaktive Visualisierungen für ESP32-Breadboard-Schaltungen. Standalone HTML + SVG, kein Build-System.
+Sammlung von KI-generierten HTML/SVG-Visualisierungen. Kein Build-System, keine Abhängigkeiten.
 
 ## Verwendung
 
-Öffne `index.html` im Browser, um alle Demos und Schaltpläne zu durchsuchen.
+`index.html` im Browser öffnen – alle Demos und Schaltpläne werden aufgelistet.
