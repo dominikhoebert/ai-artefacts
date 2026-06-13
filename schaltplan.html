@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schaltplan – LED-Stromkreis</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2129;
+    --wire: #4a9eff;
+    --wire-active: #ffd24a;
+    --comp: #e6edf3;
+    --accent: #ff5252;
+    --label: #9fb3c8;
+    --grid: #232c36;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--comp);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 .3rem; font-weight: 600; }
+  header p { margin: 0; color: var(--label); font-size: .9rem; }
+
+  .toolbar {
+    display: flex;
+    gap: .6rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+  .toolbar button {
+    background: var(--panel);
+    color: var(--comp);
+    border: 1px solid var(--grid);
+    border-radius: 8px;
+    padding: .5rem 1rem;
+    font-size: .85rem;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .toolbar button:hover { border-color: var(--wire); }
+  .toolbar button.on { background: var(--wire); color: #04101f; border-color: var(--wire); }
+
+  .stage {
+    width: 100%;
+    max-width: 760px;
+    background: var(--panel);
+    border: 1px solid var(--grid);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  }
+  svg { width: 100%; height: auto; display: block; }
+
+  .wire {
+    fill: none;
+    stroke: var(--wire);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke .2s, filter .2s;
+  }
+  .comp-group { cursor: pointer; }
+  .comp-group .body { transition: filter .2s, stroke .2s; }
+  .comp-group:hover .body {
+    filter: drop-shadow(0 0 8px var(--wire));
+    stroke: #fff;
+  }
+  .lbl { fill: var(--comp); font-size: 15px; font-weight: 600; }
+  .sub { fill: var(--label); font-size: 11px; }
+  .term { fill: var(--label); font-size: 13px; font-weight: 700; }
+
+  /* current-flow animation */
+  .flow .wire {
+    stroke: var(--wire-active);
+    stroke-dasharray: 10 10;
+    animation: dash 0.6s linear infinite;
+    filter: drop-shadow(0 0 4px var(--wire-active));
+  }
+  @keyframes dash { to { stroke-dashoffset: -20; } }
+
+  .led-on { fill: var(--accent); filter: drop-shadow(0 0 12px var(--accent)); }
+  .led-off { fill: #5a1f1f; }
+
+  /* tooltip */
+  #tip {
+    position: fixed;
+    pointer-events: none;
+    background: #04101f;
+    color: #e6edf3;
+    border: 1px solid var(--wire);
+    border-radius: 8px;
+    padding: .5rem .7rem;
+    font-size: .8rem;
+    max-width: 220px;
+    opacity: 0;
+    transition: opacity .12s;
+    z-index: 10;
+    line-height: 1.4;
+  }
+  #tip b { color: var(--wire); }
+
+  .legend {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    color: var(--label);
+    font-size: .8rem;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+  .swatch { width: 22px; height: 4px; border-radius: 2px; }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 1.15rem; }
+    .lbl { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Schaltplan – LED-Stromkreis</h1>
+  <p>BAT1 (5V) → SW1 → R1 (220&nbsp;Ω) → LED1 → zurück zu BAT1</p>
+</header>
+
+<div class="toolbar">
+  <button id="btnSwitch" class="on">Schalter: EIN</button>
+  <button id="btnFlow">Stromfluss anzeigen</button>
+</div>
+
+<div class="stage">
+  <svg viewBox="0 0 700 420" xmlns="http://www.w3.org/2000/svg" id="circuit" role="img" aria-label="Elektronischer Schaltplan">
+
+    <!-- ===================== WIRES ===================== -->
+    <!-- BAT+ up and across top to switch -->
+    <path class="wire" d="M 120 150 L 120 60 L 250 60" />
+    <!-- switch to resistor -->
+    <path class="wire" d="M 330 60 L 430 60" />
+    <!-- resistor to LED anode (down right side) -->
+    <path class="wire" d="M 510 60 L 600 60 L 600 175" />
+    <!-- LED cathode down to bottom, back to BAT- -->
+    <path class="wire" d="M 600 245 L 600 360 L 120 360 L 120 250" />
+
+    <!-- ===================== BATTERY (BAT1) ===================== -->
+    <g class="comp-group" data-name="BAT1"
+       data-info="Batterie / Spannungsquelle&#10;Spannung: 5 V&#10;Liefert die Energie für den Stromkreis. Langer Strich = Pluspol (+), kurzer Strich = Minuspol (−).">
+      <!-- long plate (+) -->
+      <line class="body" x1="95" y1="150" x2="145" y2="150" stroke="var(--comp)" stroke-width="3"/>
+      <!-- short plate (-) -->
+      <line class="body" x1="108" y1="170" x2="132" y2="170" stroke="var(--comp)" stroke-width="3"/>
+      <!-- long plate (+) -->
+      <line class="body" x1="95" y1="190" x2="145" y2="190" stroke="var(--comp)" stroke-width="3"/>
+      <!-- short plate (-) -->
+      <line class="body" x1="108" y1="210" x2="132" y2="210" stroke="var(--comp)" stroke-width="3"/>
+      <!-- terminal stubs -->
+      <line class="body" x1="120" y1="130" x2="120" y2="150" stroke="var(--comp)" stroke-width="3"/>
+      <line class="body" x1="120" y1="210" x2="120" y2="230" stroke="var(--comp)" stroke-width="3"/>
+      <text class="term" x="150" y="135">+</text>
+      <text class="term" x="150" y="228">−</text>
+      <text class="lbl" x="40" y="185">BAT1</text>
+      <text class="sub" x="40" y="200">5 V</text>
+    </g>
+
+    <!-- ===================== SWITCH (SW1) ===================== -->
+    <g class="comp-group" data-name="SW1"
+       data-info="Schalter&#10;Öffnet oder schließt den Stromkreis. Im geschlossenen Zustand fließt Strom, im offenen Zustand nicht.">
+      <circle class="body" cx="250" cy="60" r="4" fill="var(--comp)"/>
+      <circle class="body" cx="330" cy="60" r="4" fill="var(--comp)"/>
+      <!-- movable arm: id toggled by JS -->
+      <line id="swArm" class="body" x1="250" y1="60" x2="320" y2="42" stroke="var(--comp)" stroke-width="3"/>
+      <text class="lbl" x="262" y="100">SW1</text>
+    </g>
+
+    <!-- ===================== RESISTOR (R1) ===================== -->
+    <g class="comp-group" data-name="R1"
+       data-info="Widerstand&#10;Wert: 220 Ω&#10;Begrenzt den Strom durch die LED auf einen sicheren Wert und verhindert deren Zerstörung.">
+      <rect class="body" x="430" y="48" width="80" height="24" rx="3"
+            fill="none" stroke="var(--comp)" stroke-width="3"/>
+      <text class="lbl" x="430" y="100">R1</text>
+      <text class="sub" x="430" y="115">220 Ω</text>
+    </g>
+
+    <!-- ===================== LED (LED1) ===================== -->
+    <g class="comp-group" data-name="LED1"
+       data-info="Leuchtdiode (LED), rot&#10;Leuchtet, wenn Strom in Durchlassrichtung fließt (von Anode + zur Kathode −). Anode oben, Kathode unten.">
+      <!-- triangle (anode -> cathode pointing down) -->
+      <polygon id="ledBody" class="body led-on" points="580,180 620,180 600,215"
+               stroke="var(--comp)" stroke-width="2"/>
+      <!-- cathode bar -->
+      <line class="body" x1="580" y1="218" x2="620" y2="218" stroke="var(--comp)" stroke-width="3"/>
+      <!-- emission arrows -->
+      <g id="ledRays" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round">
+        <line x1="628" y1="178" x2="645" y2="168"/>
+        <polygon points="645,168 638,168 644,174" fill="var(--accent)" stroke="none"/>
+        <line x1="630" y1="192" x2="648" y2="186"/>
+        <polygon points="648,186 641,184 645,191" fill="var(--accent)" stroke="none"/>
+      </g>
+      <text class="term" x="624" y="180">+</text>
+      <text class="term" x="624" y="232">−</text>
+      <text class="lbl" x="520" y="200">LED1</text>
+      <text class="sub" x="520" y="215">rot</text>
+    </g>
+
+  </svg>
+</div>
+
+<div class="legend">
+  <span><span class="swatch" style="background:var(--wire)"></span> Leitung</span>
+  <span><span class="swatch" style="background:var(--wire-active)"></span> Stromfluss</span>
+  <span>Tipp: über Bauteile fahren / tippen für Infos</span>
+</div>
+
+<div id="tip"></div>
+
+<script>
+(function () {
+  const circuit  = document.getElementById('circuit');
+  const tip      = document.getElementById('tip');
+  const btnSwitch= document.getElementById('btnSwitch');
+  const btnFlow  = document.getElementById('btnFlow');
+  const swArm    = document.getElementById('swArm');
+  const ledBody  = document.getElementById('ledBody');
+  const ledRays  = document.getElementById('ledRays');
+
+  let switchOn = true;
+  let flowWanted = false;
+
+  // ----- State logic: current flows only when switch is closed -----
+  function render() {
+    // switch arm position
+    if (switchOn) {
+      swArm.setAttribute('x2', '330');
+      swArm.setAttribute('y2', '60');   // closed (horizontal, touches both poles)
+      btnSwitch.textContent = 'Schalter: EIN';
+      btnSwitch.classList.add('on');
+    } else {
+      swArm.setAttribute('x2', '320');
+      swArm.setAttribute('y2', '42');   // open (lifted)
+      btnSwitch.textContent = 'Schalter: AUS';
+      btnSwitch.classList.remove('on');
+    }
+
+    const live = switchOn;            // LED lit when circuit closed
+    ledBody.classList.toggle('led-on', live);
+    ledBody.classList.toggle('led-off', !live);
+    ledRays.style.opacity = live ? '1' : '0';
+
+    // animated flow only if requested AND circuit closed
+    circuit.classList.toggle('flow', flowWanted && switchOn);
+    btnFlow.classList.toggle('on', flowWanted);
+    btnFlow.textContent = flowWanted ? 'Stromfluss aus' : 'Stromfluss anzeigen';
+  }
+
+  btnSwitch.addEventListener('click', () => { switchOn = !switchOn; render(); });
+  btnFlow.addEventListener('click',   () => { flowWanted = !flowWanted; render(); });
+
+  // ----- Tooltips -----
+  document.querySelectorAll('.comp-group').forEach(g => {
+    const show = (e) => {
+      tip.innerHTML = '<b>' + g.dataset.name + '</b><br>' +
+                      g.dataset.info.replace(/\n/g, '<br>');
+      tip.style.opacity = '1';
+      move(e);
+    };
+    const move = (e) => {
+      const pt = (e.touches ? e.touches[0] : e);
+      let x = pt.clientX + 14, y = pt.clientY + 14;
+      const r = tip.getBoundingClientRect();
+      if (x + r.width  > window.innerWidth)  x = pt.clientX - r.width  - 14;
+      if (y + r.height > window.innerHeight) y = pt.clientY - r.height - 14;
+      tip.style.left = x + 'px';
+      tip.style.top  = y + 'px';
+    };
+    const hide = () => { tip.style.opacity = '0'; };
+
+    g.addEventListener('mouseenter', show);
+    g.addEventListener('mousemove',  move);
+    g.addEventListener('mouseleave', hide);
+    g.addEventListener('touchstart', show, {passive:true});
+    g.addEventListener('touchend',   () => setTimeout(hide, 1500));
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

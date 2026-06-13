@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 + DHT11 + OLED – Interaktiver Schaltplan</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #171c24;
+    --panel-line: #2a323d;
+    --txt: #e6edf3;
+    --txt-dim: #8b97a5;
+    --accent: #4fc3f7;
+    --pin-3v3: #ff5252;
+    --pin-gnd: #455a64;
+    --pin-data: #ffca28;
+    --pin-scl: #66bb6a;
+    --pin-sda: #ab47bc;
+    --wire-off: #3a4350;
+    --on-glow: #4fc3f7;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 50% 0%, #141a22 0%, var(--bg) 70%);
+    color: var(--txt);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+    margin: 0 0 6px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  header p {
+    margin: 0;
+    color: var(--txt-dim);
+    font-size: 0.9rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+  }
+
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 14px;
+    padding: 10px;
+    overflow: hidden;
+  }
+
+  svg { width: 100%; height: auto; display: block; }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .card h2 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--txt-dim);
+    margin: 0 0 12px;
+  }
+
+  .btn {
+    width: 100%;
+    border: none;
+    border-radius: 9px;
+    padding: 11px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.08s, filter 0.15s;
+    color: #061018;
+  }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-power {
+    background: linear-gradient(135deg, #ff7043, #ff5252);
+    color: #fff;
+  }
+  .btn-power.on {
+    background: linear-gradient(135deg, #43a047, #66bb6a);
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--panel-line);
+    font-size: 0.88rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--txt-dim); }
+  .stat-row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .slider-block { margin-bottom: 14px; }
+  .slider-block label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    color: var(--txt-dim);
+  }
+  .slider-block label b { color: var(--txt); font-variant-numeric: tabular-nums; }
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  input[type=range]:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.78rem; }
+  .legend .item { display: flex; align-items: center; gap: 6px; color: var(--txt-dim); }
+  .legend .dot { width: 12px; height: 4px; border-radius: 2px; }
+
+  .pin-pointer { cursor: pointer; }
+
+  /* current flow animation */
+  .wire { stroke-width: 3; fill: none; stroke-linecap: round; transition: stroke 0.25s; }
+  .wire.flow {
+    stroke-dasharray: 7 9;
+    animation: dash 0.7s linear infinite;
+  }
+  @keyframes dash { to { stroke-dashoffset: -32; } }
+
+  .powered .esp-led { animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+  }
+
+  .glow { filter: drop-shadow(0 0 5px var(--on-glow)); }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    padding: 2px 9px;
+    border-radius: 20px;
+    background: #2a323d;
+    color: var(--txt-dim);
+  }
+  .badge.live { background: #143b22; color: #66bb6a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ESP32 · DHT11 · OLED — Interaktiver Schaltplan</h1>
+    <p>Versorgung einschalten, Sensorwerte verändern und den Datenfluss auf dem Display verfolgen</p>
+  </header>
+
+  <div class="layout">
+    <div class="stage" id="stage">
+      <svg id="schematic" viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg">
+        <!-- ===================== WIRES (drawn first, behind components) ===================== -->
+        <g id="wires" stroke-linejoin="round">
+          <!-- ESP 3V3 -> DHT VCC -->
+          <path class="wire" id="w-dht-vcc" d="M 250 150 H 300 V 120 H 470" style="stroke:var(--pin-3v3)"/>
+          <!-- ESP GND -> DHT GND -->
+          <path class="wire" id="w-dht-gnd" d="M 250 190 H 320 V 175 H 470" style="stroke:var(--pin-gnd)"/>
+          <!-- ESP GPIO4 -> DHT DATA -->
+          <path class="wire" id="w-dht-data" d="M 250 230 H 340 V 147 H 470" style="stroke:var(--pin-data)"/>
+
+          <!-- ESP 3V3 -> OLED VCC -->
+          <path class="wire" id="w-oled-vcc" d="M 250 270 H 290 V 380 H 470" style="stroke:var(--pin-3v3)"/>
+          <!-- ESP GND -> OLED GND -->
+          <path class="wire" id="w-oled-gnd" d="M 250 310 H 310 V 408 H 470" style="stroke:var(--pin-gnd)"/>
+          <!-- ESP GPIO22 SCL -> OLED SCL -->
+          <path class="wire" id="w-oled-scl" d="M 250 350 H 330 V 436 H 470" style="stroke:var(--pin-scl)"/>
+          <!-- ESP GPIO21 SDA -> OLED SDA -->
+          <path class="wire" id="w-oled-sda" d="M 250 390 H 350 V 464 H 470" style="stroke:var(--pin-sda)"/>
+        </g>
+
+        <!-- ===================== ESP32 ===================== -->
+        <g id="esp32">
+          <rect x="70" y="120" width="180" height="300" rx="12" fill="#1f2733" stroke="#3a4350" stroke-width="2"/>
+          <rect x="95" y="135" width="130" height="55" rx="5" fill="#11161d" stroke="#2a323d"/>
+          <text x="160" y="167" text-anchor="middle" fill="#cfd8e3" font-size="15" font-weight="700">ESP32</text>
+          <text x="160" y="183" text-anchor="middle" fill="#6b7785" font-size="9">DEV KIT</text>
+
+          <!-- onboard power LED -->
+          <circle class="esp-led" cx="110" cy="205" r="5" fill="#66bb6a" opacity="0.25"/>
+          <text x="122" y="209" fill="#6b7785" font-size="9">PWR</text>
+
+          <!-- right side pins -->
+          <g font-size="11" fill="#aeb9c5" text-anchor="end">
+            <circle class="pin" cx="250" cy="150" r="4" fill="var(--pin-3v3)"/>
+            <text x="244" y="154">3V3</text>
+            <circle class="pin" cx="250" cy="190" r="4" fill="var(--pin-gnd)"/>
+            <text x="244" y="194">GND</text>
+            <circle class="pin" cx="250" cy="230" r="4" fill="var(--pin-data)"/>
+            <text x="244" y="234">GPIO4</text>
+            <circle class="pin" cx="250" cy="270" r="4" fill="var(--pin-3v3)"/>
+            <text x="244" y="274">3V3</text>
+            <circle class="pin" cx="250" cy="310" r="4" fill="var(--pin-gnd)"/>
+            <text x="244" y="314">GND</text>
+            <circle class="pin" cx="250" cy="350" r="4" fill="var(--pin-scl)"/>
+            <text x="244" y="354">GPIO22</text>
+            <circle class="pin" cx="250" cy="390" r="4" fill="var(--pin-sda)"/>
+            <text x="244" y="394">GPIO21</text>
+          </g>
+        </g>
+
+        <!-- ===================== DHT11 ===================== -->
+        <g id="dht11">
+          <rect x="470" y="95" width="150" height="95" rx="10" fill="#2b3a4a" stroke="#3a4350" stroke-width="2"/>
+          <!-- grille -->
+          <g stroke="#1c2530" stroke-width="2">
+            <line x1="500" y1="112" x2="590" y2="112"/>
+            <line x1="500" y1="124" x2="590" y2="124"/>
+            <line x1="500" y1="136" x2="590" y2="136"/>
+            <line x1="500" y1="148" x2="590" y2="148"/>
+          </g>
+          <text x="545" y="178" text-anchor="middle" fill="#cfd8e3" font-size="13" font-weight="700">DHT11</text>
+          <!-- pins -->
+          <circle class="pin" cx="470" cy="120" r="4" fill="var(--pin-3v3)"/>
+          <text x="478" y="112" fill="#aeb9c5" font-size="9">VCC</text>
+          <circle class="pin" cx="470" cy="147" r="4" fill="var(--pin-data)"/>
+          <text x="478" y="143" fill="#aeb9c5" font-size="9">DATA</text>
+          <circle class="pin" cx="470" cy="175" r="4" fill="var(--pin-gnd)"/>
+          <text x="478" y="171" fill="#aeb9c5" font-size="9">GND</text>
+        </g>
+
+        <!-- ===================== OLED ===================== -->
+        <g id="oled">
+          <rect x="470" y="355" width="210" height="135" rx="10" fill="#10151c" stroke="#3a4350" stroke-width="2"/>
+          <!-- screen -->
+          <rect id="oled-screen" x="505" y="372" width="140" height="72" rx="4" fill="#05080c" stroke="#222b35"/>
+          <!-- screen content (hidden until live) -->
+          <g id="oled-content" opacity="0">
+            <text x="515" y="392" fill="#7ee8ff" font-size="11" font-family="monospace">Klima-Monitor</text>
+            <line x1="515" y1="399" x2="635" y2="399" stroke="#1c4a55" stroke-width="1"/>
+            <text id="oled-temp" x="515" y="418" fill="#aef0ff" font-size="13" font-family="monospace" font-weight="700">T: --.- C</text>
+            <text id="oled-hum"  x="515" y="436" fill="#aef0ff" font-size="13" font-family="monospace" font-weight="700">H: --.- %</text>
+          </g>
+          <text x="575" y="478" text-anchor="middle" fill="#cfd8e3" font-size="12" font-weight="700">OLED 0.96" (I²C)</text>
+
+          <!-- pins -->
+          <circle class="pin" cx="470" cy="380" r="4" fill="var(--pin-3v3)"/>
+          <text x="478" y="376" fill="#aeb9c5" font-size="9">VCC</text>
+          <circle class="pin" cx="470" cy="408" r="4" fill="var(--pin-gnd)"/>
+          <text x="478" y="404" fill="#aeb9c5" font-size="9">GND</text>
+          <circle class="pin" cx="470" cy="436" r="4" fill="var(--pin-scl)"/>
+          <text x="478" y="432" fill="#aeb9c5" font-size="9">SCL</text>
+          <circle class="pin" cx="470" cy="464" r="4" fill="var(--pin-sda)"/>
+          <text x="478" y="460" fill="#aeb9c5" font-size="9">SDA</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>Steuerung</h2>
+        <button class="btn btn-power" id="powerBtn">⏻ Versorgung EIN</button>
+      </div>
+
+      <div class="card">
+        <h2>DHT11 Sensor <span class="badge" id="sensorBadge">offline</span></h2>
+        <div class="slider-block">
+          <label>Temperatur <b><span id="tempLbl">22.0</span> °C</b></label>
+          <input type="range" id="tempSlider" min="0" max="50" step="0.5" value="22" disabled>
+        </div>
+        <div class="slider-block" style="margin-bottom:0">
+          <label>Luftfeuchte <b><span id="humLbl">45</span> %</b></label>
+          <input type="range" id="humSlider" min="20" max="90" step="1" value="45" disabled>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Status</h2>
+        <div class="stat-row"><span class="label">Stromversorgung</span><span class="val" id="stPower">AUS</span></div>
+        <div class="stat-row"><span class="label">3V3 Schiene</span><span class="val" id="stRail">0.0 V</span></div>
+        <div class="stat-row"><span class="label">I²C Bus</span><span class="val" id="stI2c">inaktiv</span></div>
+        <div class="stat-row"><span class="label">Display</span><span class="val" id="stDisp">leer</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Legende</h2>
+        <div class="legend">
+          <span class="item"><span class="dot" style="background:var(--pin-3v3)"></span>3V3</span>
+          <span class="item"><span class="dot" style="background:var(--pin-gnd)"></span>GND</span>
+          <span class="item"><span class="dot" style="background:var(--pin-data)"></span>DATA</span>
+          <span class="item"><span class="dot" style="background:var(--pin-scl)"></span>SCL</span>
+          <span class="item"><span class="dot" style="background:var(--pin-sda)"></span>SDA</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ----------------------------------------------------------
+   Datenmodell der Schaltung
+---------------------------------------------------------- */
+const circuit = {
+  power: false,                 // Versorgung ein/aus (Stromquelle = USB/5V Regler -> 3V3)
+  rail: 0,                      // Spannung der 3V3-Schiene
+  temp: 22.0,
+  hum: 45,
+  // Verbindungen: jede "Leitung" kennt das DOM-Element und ob sie unter Spannung steht
+  wires: [
+    "w-dht-vcc","w-dht-gnd","w-dht-data",
+    "w-oled-vcc","w-oled-gnd","w-oled-scl","w-oled-sda"
+  ]
+};
+
+/* DOM Referenzen */
+const $ = id => document.getElementById(id);
+const stage      = $("stage");
+const svg        = $("schematic");
+const powerBtn   = $("powerBtn");
+const tempSlider = $("tempSlider");
+const humSlider  = $("humSlider");
+const tempLbl    = $("tempLbl");
+const humLbl     = $("humLbl");
+const oledContent= $("oled-content");
+const oledScreen = $("oled-screen");
+const oledTemp   = $("oled-temp");
+const oledHum    = $("oled-hum");
+const sensorBadge= $("sensorBadge");
+
+/* ----------------------------------------------------------
+   Kern: Stromfluss berechnen und Visualisierung aktualisieren
+---------------------------------------------------------- */
+function simulate() {
+  // 1) Stromquelle prüfen -> Schiene unter Spannung?
+  circuit.rail = circuit.power ? 3.3 : 0;
+  const live = circuit.power; // ohne Versorgung kein Datenfluss
+
+  // 2) Leitungen: alle führen Strom/Signal, sobald Versorgung an ist
+  circuit.wires.forEach(id => {
+    const w = $(id);
+    if (live) w.classList.add("flow");
+    else      w.classList.remove("flow");
+    // abgedunkelt wenn keine Versorgung
+    w.style.opacity = live ? "1" : "0.4";
+  });
+
+  // 3) ESP32 Power-LED
+  svg.classList.toggle("powered", live);
+
+  // 4) Display: zeigt nur Werte, wenn ESP läuft UND I2C/Sensor versorgt sind
+  if (live) {
+    oledContent.setAttribute("opacity", "1");
+    oledScreen.classList.add("glow");
+    oledTemp.textContent = "T: " + circuit.temp.toFixed(1) + " C";
+    oledHum.textContent  = "H: " + circuit.hum.toFixed(0) + " %";
+  } else {
+    oledContent.setAttribute("opacity", "0");
+    oledScreen.classList.remove("glow");
+  }
+
+  updateStatusPanel(live);
+}
+
+/* ----------------------------------------------------------
+   Seitliches Status-Panel
+---------------------------------------------------------- */
+function updateStatusPanel(live) {
+  $("stPower").textContent = live ? "EIN" : "AUS";
+  $("stPower").style.color = live ? "#66bb6a" : "#ff7043";
+
+  $("stRail").textContent = circuit.rail.toFixed(1) + " V";
+  $("stRail").style.color = live ? "#ff5252" : "var(--txt)";
+
+  $("stI2c").textContent  = live ? "aktiv (0x3C)" : "inaktiv";
+  $("stI2c").style.color  = live ? "#ab47bc" : "var(--txt)";
+
+  $("stDisp").textContent = live ? "Werte aktiv" : "leer";
+  $("stDisp").style.color = live ? "#7ee8ff" : "var(--txt)";
+
+  sensorBadge.textContent  = live ? "live" : "offline";
+  sensorBadge.className     = "badge" + (live ? " live" : "");
+}
+
+/* ----------------------------------------------------------
+   Interaktion
+---------------------------------------------------------- */
+powerBtn.addEventListener("click", () => {
+  circuit.power = !circuit.power;
+  powerBtn.classList.toggle("on", circuit.power);
+  powerBtn.textContent = circuit.power ? "⏻ Versorgung AUS" : "⏻ Versorgung EIN";
+
+  // Slider nur bei Versorgung bedienbar (Sensor liefert sonst nichts)
+  tempSlider.disabled = !circuit.power;
+  humSlider.disabled  = !circuit.power;
+
+  simulate();
+});
+
+tempSlider.addEventListener("input", e => {
+  circuit.temp = parseFloat(e.target.value);
+  tempLbl.textContent = circuit.temp.toFixed(1);
+  simulate();
+});
+
+humSlider.addEventListener("input", e => {
+  circuit.hum = parseInt(e.target.value, 10);
+  humLbl.textContent = circuit.hum;
+  simulate();
+});
+
+/* Pins / Komponenten anklickbar machen (kleines Tooltip-Feedback) */
+document.querySelectorAll(".pin").forEach(p => {
+  p.classList.add("pin-pointer");
+  p.addEventListener("mouseenter", () => p.setAttribute("r", "6"));
+  p.addEventListener("mouseleave", () => p.setAttribute("r", "4"));
+});
+
+/* Initialzustand zeichnen */
+simulate();
+</script>
+</body>
+</html>

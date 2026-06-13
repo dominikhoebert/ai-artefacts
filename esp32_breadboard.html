@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Steckbrett-Simulator</title>
+<style>
+  :root {
+    --board-cream: #e8e4d8;
+    --board-cream-dark: #d6d1c0;
+    --hole: #2b2b2b;
+    --hole-rim: #b8b3a3;
+    --rail-red: #c0392b;
+    --rail-blue: #2471a3;
+    --rail-track: #f3efe4;
+    --esp-pcb: #1f2d3d;
+    --esp-silk: #cfd8e0;
+    --copper: #c8862b;
+    --ink: #14110d;
+    --ink-soft: #5a544a;
+    --panel: #f7f4ec;
+    --panel-line: #ddd6c5;
+    --accent: #e07a14;
+    --live: #ffd23f;
+    --bg: #c4bba8;
+    --grid-warm: #b3a98f;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background:
+      radial-gradient(circle at 20% 0%, #d2c9b4 0%, transparent 55%),
+      linear-gradient(160deg, #c4bba8 0%, #b0a68f 100%);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* ---- Masthead ---- */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .title-block h1 {
+    font-family: "Courier New", monospace;
+    font-weight: 700;
+    font-size: clamp(26px, 5vw, 46px);
+    letter-spacing: -0.5px;
+    margin: 0;
+    line-height: 0.95;
+  }
+  .title-block .sub {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-top: 6px;
+  }
+  .specsheet {
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-align: right;
+    line-height: 1.6;
+    border-left: 1px solid var(--panel-line);
+    padding-left: 14px;
+  }
+  .specsheet b { color: var(--ink); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 290px;
+    gap: 22px;
+    margin-top: 22px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  /* ---- Board stage ---- */
+  .stage {
+    background: #2a2620;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 18px 40px -18px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.04);
+    position: relative;
+  }
+  .stage::before {
+    content: "PROTOTYPING BENCH — 01";
+    position: absolute;
+    top: 8px;
+    left: 16px;
+    font-family: "Courier New", monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #6f685a;
+  }
+  svg.board { width: 100%; height: auto; display: block; margin-top: 10px; }
+
+  /* SVG element styling */
+  .hole { fill: var(--hole); }
+  .hole-rim { fill: none; stroke: var(--hole-rim); stroke-width: 0.6; opacity: 0.5; }
+  .coord-label { font-family: "Courier New", monospace; font-size: 7px; fill: #8a8472; }
+  .rail-plus  { fill: var(--rail-red); }
+  .rail-minus { fill: var(--rail-blue); }
+
+  .wire { stroke-linecap: round; fill: none; transition: filter 0.25s; }
+  .wire.live { filter: drop-shadow(0 0 4px var(--live)); }
+  .wire-dash { stroke-dasharray: 2 6; animation: flow 0.7s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -8; } }
+
+  /* RGB LED glow */
+  .led-dome { transition: fill 0.3s, filter 0.3s; }
+  .led-glow { opacity: 0; transition: opacity 0.3s; }
+  .led-on .led-glow { opacity: 0.9; }
+
+  /* Buzzer */
+  .buzzer-ring { transform-origin: center; }
+  .buzzer-sound { opacity: 0; transition: opacity 0.2s; }
+  .buzzing .buzzer-sound { opacity: 1; animation: ping 0.9s ease-out infinite; }
+  @keyframes ping {
+    0%   { opacity: 0.8; transform: scale(0.6); }
+    100% { opacity: 0;   transform: scale(1.6); }
+  }
+  .buzzing .buzzer-disc { animation: shake 0.12s linear infinite; }
+  @keyframes shake { 0%,100%{ transform: translateX(0);} 50%{ transform: translateX(0.6px);} }
+
+  .comp-hit { cursor: default; }
+  .switch-hit { cursor: pointer; }
+
+  /* ---- Side panel ---- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .panel + .panel { margin-top: 18px; }
+  .panel h2 {
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin: 0;
+    padding: 12px 16px;
+    background: var(--ink);
+    color: var(--panel);
+  }
+  .panel .body { padding: 14px 16px; }
+
+  /* Controls */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+  }
+  .ctrl-row + .ctrl-row { border-top: 1px dashed var(--panel-line); }
+  .ctrl-label { font-size: 13px; }
+  .ctrl-label small { display:block; color: var(--ink-soft); font-size: 11px; font-family:"Courier New",monospace; }
+
+  .toggle {
+    --w: 50px; --h: 26px;
+    width: var(--w); height: var(--h);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: #cfc8b6;
+    position: relative;
+    cursor: pointer;
+    flex: none;
+    transition: background 0.2s;
+    font-family: "Courier New", monospace;
+    font-size: 8px;
+    font-weight: 700;
+  }
+  .toggle .knob {
+    position: absolute; top: 2px; left: 2px;
+    width: calc(var(--h) - 8px); height: calc(var(--h) - 8px);
+    background: var(--ink);
+    transition: left 0.18s ease;
+  }
+  .toggle .lbl-on, .toggle .lbl-off {
+    position:absolute; top:50%; transform: translateY(-50%);
+    color: var(--ink); letter-spacing: 1px;
+  }
+  .toggle .lbl-on { right: 5px; opacity: 0; }
+  .toggle .lbl-off { left: 6px; opacity: 0.65; }
+  .toggle[aria-pressed="true"] { background: var(--accent); }
+  .toggle[aria-pressed="true"] .knob { left: calc(var(--w) - var(--h) + 4px); }
+  .toggle[aria-pressed="true"] .lbl-on { opacity: 1; }
+  .toggle[aria-pressed="true"] .lbl-off { opacity: 0; }
+
+  .swatches { display:flex; gap:8px; margin-top: 4px; }
+  .swatch {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 2px solid var(--ink);
+    cursor: pointer; padding: 0;
+    position: relative;
+  }
+  .swatch[aria-pressed="true"]::after {
+    content:""; position:absolute; inset: -5px;
+    border: 1.5px solid var(--ink); border-radius: 50%;
+  }
+
+  .readout {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.9;
+  }
+  .readout .k { color: var(--ink-soft); }
+  .readout .v { float: right; font-weight: 700; }
+  .status-pill {
+    display:inline-block;
+    font-family:"Courier New",monospace;
+    font-size: 10px; letter-spacing: 2px;
+    padding: 2px 8px; border-radius: 3px;
+    border: 1px solid var(--ink);
+  }
+  .pill-on  { background: var(--live); }
+  .pill-off { background: #cfc8b6; color: var(--ink-soft); }
+
+  /* Legend */
+  .legend-item { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:12px; }
+  .legend-item + .legend-item { border-top: 1px dashed var(--panel-line); }
+  .legend-key { width: 26px; height: 14px; border-radius:3px; border:1px solid rgba(0,0,0,0.25); flex:none; }
+
+  /* Hover coordinate badge */
+  #coord-badge {
+    position: fixed;
+    pointer-events: none;
+    background: var(--ink);
+    color: var(--live);
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    padding: 3px 7px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 50;
+    white-space: nowrap;
+  }
+
+  footer {
+    margin-top: 30px;
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--panel-line);
+    padding-top: 12px;
+    display:flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .stage { background: #fff; box-shadow:none; }
+    .panel h2 { background:#000; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>ESP32&nbsp;BREADBOARD</h1>
+      <div class="sub">RGB LED · Piezo · Temperatur</div>
+    </div>
+    <div class="specsheet">
+      MCU&nbsp;&nbsp;<b>ESP32-DevKitM-1</b><br>
+      RGB&nbsp;&nbsp;GPIO&nbsp;<b>25 / 26 / 27</b><br>
+      BUZZ&nbsp;GPIO&nbsp;<b>14</b> &nbsp; TMP&nbsp;GPIO&nbsp;<b>34</b><br>
+      RAIL&nbsp;<b>3V3 / GND</b>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ============ BOARD ============ -->
+    <div class="stage">
+      <svg class="board" id="board" viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Steckbrett mit ESP32 und Bauteilen">
+        <!-- breadboard base + holes are drawn by JS into these groups -->
+        <g id="board-body"></g>
+        <g id="holes"></g>
+        <g id="labels"></g>
+        <g id="wires"></g>
+        <g id="components"></g>
+        <g id="overlay"></g>
+      </svg>
+    </div>
+
+    <!-- ============ PANELS ============ -->
+    <div>
+      <div class="panel">
+        <h2>Steuerung</h2>
+        <div class="body">
+          <div class="ctrl-row">
+            <div class="ctrl-label">Stromversorgung<small>USB / 3V3-Schiene</small></div>
+            <button class="toggle" id="power" aria-pressed="true" aria-label="Stromversorgung umschalten">
+              <span class="knob"></span><span class="lbl-on">ON</span><span class="lbl-off">OFF</span>
+            </button>
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-label">RGB-LED<small>aktive Farbe wählen</small></div>
+          </div>
+          <div class="swatches" id="swatches">
+            <button class="swatch" data-col="off"   style="background:#3a3a3a"            title="Aus"   aria-pressed="true"></button>
+            <button class="swatch" data-col="red"   style="background:#ff3b30"            title="Rot"   aria-pressed="false"></button>
+            <button class="swatch" data-col="green" style="background:#34c759"            title="Grün"  aria-pressed="false"></button>
+            <button class="swatch" data-col="blue"  style="background:#0a84ff"            title="Blau"  aria-pressed="false"></button>
+            <button class="swatch" data-col="white" style="background:linear-gradient(135deg,#ff3b30,#34c759,#0a84ff)" title="Alle (Weiß)" aria-pressed="false"></button>
+          </div>
+
+          <div class="ctrl-row" style="margin-top:6px;">
+            <div class="ctrl-label">Buzzer<small>Piezo an GPIO 14</small></div>
+            <button class="toggle" id="buzzer" aria-pressed="false" aria-label="Buzzer umschalten">
+              <span class="knob"></span><span class="lbl-on">ON</span><span class="lbl-off">OFF</span>
+            </button>
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-label">Umgebungstemperatur<small id="temp-sub">Sensor LM35 → ADC</small></div>
+            <input type="range" id="temp" min="-10" max="50" value="22" style="width:90px;accent-color:var(--accent)">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Live-Status</h2>
+        <div class="body readout">
+          <div><span class="k">Schiene 3V3</span><span class="v" id="r-power">—</span></div>
+          <div><span class="k">RGB-LED</span><span class="v" id="r-led">—</span></div>
+          <div><span class="k">Buzzer</span><span class="v" id="r-buzz">—</span></div>
+          <div><span class="k">Temp-Sensor</span><span class="v" id="r-temp">—</span></div>
+          <div style="margin-top:8px;"><span class="status-pill pill-off" id="r-pill">STANDBY</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Legende</h2>
+        <div class="body">
+          <div class="legend-item"><span class="legend-key" style="background:#cc2b2b"></span>3V3 (Plus-Draht)</div>
+          <div class="legend-item"><span class="legend-key" style="background:#222"></span>GND (Minus-Draht)</div>
+          <div class="legend-item"><span class="legend-key" style="background:#e0a32a"></span>GPIO-Signal</div>
+          <div class="legend-item"><span class="legend-key" style="background:#2f9e44"></span>Sensor-Ausgang</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>KLICK SCHALTER · HOVER FÜR POSITION · LED FOLGT FARBWAHL</span>
+    <span>STD. STECKBRETT 30 × A–J · 2 STROMSCHIENEN</span>
+  </footer>
+</div>
+
+<div id="coord-badge"></div>
+
+<script>
+/* =====================================================================
+   GEOMETRY of the breadboard
+   - 30 columns (1..30), rows A-E (top half) and F-J (bottom half)
+   - 4 power-rail lines: top(+,-), bottom(+,-)
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+const board = document.getElementById('board');
+const gBody = document.getElementById('board-body');
+const gHoles = document.getElementById('holes');
+const gLabels = document.getElementById('labels');
+const gWires = document.getElementById('wires');
+const gComp  = document.getElementById('components');
+const gOver  = document.getElementById('overlay');
+
+const COLS = 30;
+const X0 = 70;          // first column x
+const DX = 21;          // column spacing
+const PITCH = 21;       // generic pitch
+const rowY = {          // y position of each socket row
+  // top power rail
+  TP: 40, TM: 56,
+  // top block A-E
+  A: 120, B: 141, C: 162, D: 183, E: 204,
+  // bottom block F-J
+  F: 266, G: 287, H: 308, I: 329, J: 350,
+  // bottom power rail
+  BP: 414, BM: 430
+};
+function colX(c){ return X0 + (c-1)*DX; }
+
+/* socket coordinate registry: key "A5" -> {x,y} */
+const SOCK = {};
+function reg(key,x,y){ SOCK[key] = {x,y}; }
+
+/* ---------- draw the board body ---------- */
+function drawBody(){
+  const W = 760, leftPad = 28, rightPad = 28;
+  const bx = 30, bw = 700;
+  // main board slab
+  const slab = el('rect',{x:bx,y:90,width:bw,height:290,rx:8,
+     fill:'var(--board-cream)',stroke:'var(--board-cream-dark)','stroke-width':2});
+  gBody.appendChild(slab);
+  // center channel
+  gBody.appendChild(el('rect',{x:bx,y:228,width:bw,height:14,
+     fill:'var(--board-cream-dark)'}));
+  gBody.appendChild(el('line',{x1:bx,y1:235,x2:bx+bw,y2:235,
+     stroke:'#c2bca9','stroke-width':1}));
+
+  // power-rail strips (top + bottom), each its own cream strip
+  [['top',24],['bot',392]].forEach(([pos,y])=>{
+    gBody.appendChild(el('rect',{x:bx,y:y,width:bw,height:48,rx:6,
+      fill:'var(--rail-track)',stroke:'var(--board-cream-dark)','stroke-width':1.5}));
+  });
+  // rail color lines
+  railLine('TP', 'var(--rail-red)',  34, bx, bw);
+  railLine('TM', 'var(--rail-blue)', 62, bx, bw);
+  railLine('BP', 'var(--rail-red)',  408, bx, bw);
+  railLine('BM', 'var(--rail-blue)', 436, bx, bw);
+  // rail + / - glyphs
+  railMark(36,34,'+','var(--rail-red)'); railMark(36,62,'–','var(--rail-blue)');
+  railMark(720,34,'+','var(--rail-red)'); railMark(720,62,'–','var(--rail-blue)');
+  railMark(36,408,'+','var(--rail-red)'); railMark(36,436,'–','var(--rail-blue)');
+  railMark(720,408,'+','var(--rail-red)'); railMark(720,436,'–','var(--rail-blue)');
+}
+function railLine(row,color,y,bx,bw){
+  gBody.appendChild(el('line',{x1:bx+18,y1:y,x2:bx+bw-18,y2:y,
+    stroke:color,'stroke-width':2,opacity:0.55}));
+}
+function railMark(x,y,ch,color){
+  const t = el('text',{x:x,y:y+3.5,'text-anchor':'middle',
+    'font-family':'Courier New, monospace','font-size':11,'font-weight':700,fill:color});
+  t.textContent = ch; gBody.appendChild(t);
+}
+
+/* ---------- draw holes + register coordinates ---------- */
+function hole(x,y){
+  gHoles.appendChild(el('circle',{cx:x,cy:y,r:3.4,class:'hole'}));
+  gHoles.appendChild(el('circle',{cx:x,cy:y,r:3.4,class:'hole-rim'}));
+}
+function drawHoles(){
+  // power rails: groups of 5 holes, skip every 6th (realistic gaps)
+  const railRows = [['TP',rowY.TP],['TM',rowY.TM],['BP',rowY.BP],['BM',rowY.BM]];
+  railRows.forEach(([rk,y])=>{
+    let n=0;
+    for(let c=1;c<=COLS;c++){
+      if(c%6===0) continue;            // visual gap groups of 5
+      const x = colX(c);
+      hole(x,y); reg(rk+c,x,y); n++;
+    }
+  });
+
+  // main matrix rows A-J
+  const matrixRows = ['A','B','C','D','E','F','G','H','I','J'];
+  matrixRows.forEach(r=>{
+    for(let c=1;c<=COLS;c++){
+      const x=colX(c), y=rowY[r];
+      hole(x,y); reg(r+c,x,y);
+    }
+  });
+}
+
+/* ---------- coordinate labels ---------- */
+function drawLabels(){
+  // row letters left + right
+  ['A','B','C','D','E','F','G','H','I','J'].forEach(r=>{
+    [colX(1)-16, colX(COLS)+12].forEach(x=>{
+      const t=el('text',{x:x,y:rowY[r]+2.5,'text-anchor':'middle',class:'coord-label'});
+      t.textContent=r; gLabels.appendChild(t);
+    });
+  });
+  // column numbers every 5
+  [1,5,10,15,20,25,30].forEach(c=>{
+    [rowY.A-12, rowY.J+14].forEach(y=>{
+      const t=el('text',{x:colX(c),y:y,'text-anchor':'middle',class:'coord-label'});
+      t.textContent=c; gLabels.appendChild(t);
+    });
+  });
+}
+
+/* =====================================================================
+   helper: build SVG element
+   ===================================================================== */
+function el(name, attrs={}, children=[]){
+  const e=document.createElementNS(NS,name);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  children.forEach(c=>e.appendChild(c));
+  return e;
+}
+
+/* =====================================================================
+   WIRES — described as start/end socket keys + a logical "net"
+   net: 'pwr' (3v3), 'gnd', 'gpio', 'sig'
+   ===================================================================== */
+const WIRE_COLOR = { pwr:'#cc2b2b', gnd:'#222222', gpio:'#e0a32a', sig:'#2f9e44' };
+const wires = [];   // {a,b,net,id}
+
+function addWire(aKey,bKey,net,id){
+  const a=SOCK[aKey], b=SOCK[bKey];
+  if(!a||!b){ console.warn('missing socket',aKey,bKey); return; }
+  // gentle curve so overlapping wires read clearly
+  const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
+  const lift = (a.y===b.y)? 0 : (Math.abs(a.x-b.x)>0?-8:0);
+  const d = `M ${a.x} ${a.y} C ${a.x} ${a.y+lift}, ${midx} ${midy}, ${b.x} ${b.y}`;
+  const stroke = WIRE_COLOR[net];
+  const path = el('path',{d:d,class:'wire',stroke:stroke,'stroke-width':2.6});
+  const dash = el('path',{d:d,class:'wire wire-dash',stroke:'#fff','stroke-width':1.4,opacity:0});
+  gWires.appendChild(path); gWires.appendChild(dash);
+  wires.push({a:aKey,b:bKey,net,path,dash,id});
+}
+
+/* =====================================================================
+   COMPONENTS
+   Each placed by referencing breadboard sockets. We draw a little
+   "leg" from each socket up to the component body.
+   ===================================================================== */
+const state = {
+  power:true,
+  ledColor:'off',     // off/red/green/blue/white
+  buzzer:false,
+  temp:22
+};
+
+let espRef, ledRef, buzzRef;
+
+function leg(x1,y1,x2,y2,color='#9a9384'){
+  return el('line',{x1,y1,x2,y2,stroke:color,'stroke-width':2.4,'stroke-linecap':'round'});
+}
+
+/* ---- ESP32 DevKitM (straddles the center channel, cols 6-20) ---- */
+function drawESP(){
+  const g = el('g',{class:'comp-hit'});
+  const x = colX(7)-6, y = 150, w = (colX(19)-colX(7))+12, h = 168;
+  // PCB
+  g.appendChild(el('rect',{x:x,y:y,width:w,height:h,rx:5,
+     fill:'var(--esp-pcb)',stroke:'#33455c','stroke-width':1.5}));
+  // USB connector (top)
+  g.appendChild(el('rect',{x:x+w/2-16,y:y-12,width:32,height:14,rx:2,
+     fill:'#aab3bd',stroke:'#7d8893','stroke-width':1}));
+  // antenna zig-zag silk
+  g.appendChild(el('path',{d:`M ${x+10} ${y+12} l 6 0 l 0 6 l 6 0 l 0 -6 l 6 0 l 0 6 l 6 0`,
+     fill:'none',stroke:'var(--copper)','stroke-width':1.4}));
+  // metal can (ESP32 module)
+  g.appendChild(el('rect',{x:x+12,y:y+34,width:w-24,height:54,rx:3,
+     fill:'#d7dde2',stroke:'#9aa3ac','stroke-width':1.2}));
+  txt(g, x+w/2, y+64, 'ESP32', 13, '#3a4654', 700);
+  txt(g, x+w/2, y+78, 'WROOM-32', 7, '#5b6672', 400);
+  // silk label
+  txt(g, x+w/2, y+h-8, 'ESP32-DevKitM-1', 7, 'var(--esp-silk)', 400);
+
+  // pin legs down to two rows (E-row top side, F-row bottom side) for cols 7..19
+  for(let c=7;c<=19;c++){
+    // top side pins reach into row E (above channel)
+    g.appendChild(leg(colX(c), rowY.E, colX(c), y+h, '#c9b27a'));
+    // bottom side pins reach into row F (below channel)
+    g.appendChild(leg(colX(c), rowY.F, colX(c), y, '#c9b27a'));
+  }
+  // label a few key GPIO pins on the silk
+  pinLabel(g, colX(7), y+h+0, 'GND', rowY.F);
+  espRef = g;
+  gComp.appendChild(g);
+
+  hoverName(g, 'ESP32-DevKitM-1  ·  Mikrocontroller');
+}
+function pinLabel(){ /* reserved */ }
+
+/* ---- RGB LED (4 legs): R,G,B + common cathode (GND) ---- */
+/* placed cols 23(R) 24(G) 25(B) 26(GND-ish) in rows A..E region */
+function drawRGBLed(){
+  const g = el('g',{class:'comp-hit'});
+  const baseY = 150;                       // dome center
+  const cx = colX(24);                     // dome x
+  // 4 legs from sockets up to body
+  const legCols = {R:22,G:23,B:25,K:24};   // K = common cathode (longest)
+  // legs (cathode longer, drawn slightly different)
+  g.appendChild(leg(colX(22), rowY.A, colX(22), baseY+18, '#b8b3a3'));
+  g.appendChild(leg(colX(23), rowY.A, colX(23), baseY+14, '#b8b3a3'));
+  g.appendChild(leg(colX(25), rowY.A, colX(25), baseY+14, '#b8b3a3'));
+  // longest = common cathode at col 24
+  g.appendChild(leg(colX(24), rowY.A, colX(24), baseY+22, '#7d7768'));
+
+  // glow halo (behind dome)
+  const glow = el('circle',{cx:cx,cy:baseY,r:26,class:'led-glow',fill:'#fff'});
+  g.appendChild(glow);
+  // LED dome (clear plastic with tinted core)
+  g.appendChild(el('path',{
+    d:`M ${cx-14} ${baseY+16} L ${cx-14} ${baseY} A 14 14 0 0 1 ${cx+14} ${baseY} L ${cx+14} ${baseY+16} Z`,
+    fill:'#cfd7dc',opacity:0.5,stroke:'#aab3bb','stroke-width':1}));
+  const dome = el('circle',{cx:cx,cy:baseY,r:14,class:'led-dome',
+    fill:'#3a3a3a',stroke:'#aab3bb','stroke-width':1});
+  g.appendChild(dome);
+  // flat side marker (cathode indicator)
+  g.appendChild(el('line',{x1:cx+14,y1:baseY-9,x2:cx+14,y2:baseY+9,stroke:'#8a93a0','stroke-width':2}));
+  txt(g, cx, baseY-26, 'RGB', 8, 'var(--esp-silk)', 700);
+
+  ledRef = {group:g, dome, glow};
+  gComp.appendChild(g);
+  hoverName(g, 'RGB-LED (gem. Kathode)  ·  R G B + GND');
+}
+
+/* ---- Piezo buzzer (2 legs): + and GND ---- */
+function drawBuzzer(){
+  const g = el('g',{class:'comp-hit'});
+  const cx = colX(28), cy = 150, r = 18;
+  // legs from sockets F-block? we place it lower-right in rows F..J near cols 27/28
+  g.appendChild(leg(colX(27), rowY.J, colX(27), cy+r-2, '#b8b3a3'));
+  g.appendChild(leg(colX(28), rowY.J, colX(28), cy+r-2, '#7d7768'));
+  // body (black disc)
+  const sound = el('circle',{cx:cx,cy:cy,r:r+6,class:'buzzer-sound',
+    fill:'none',stroke:'var(--accent)','stroke-width':2});
+  g.appendChild(sound);
+  const discWrap = el('g',{class:'buzzer-disc'});
+  discWrap.appendChild(el('circle',{cx:cx,cy:cy,r:r,fill:'#1c1c1c',stroke:'#3a3a3a','stroke-width':1.5}));
+  discWrap.appendChild(el('circle',{cx:cx,cy:cy,r:r-5,fill:'none',stroke:'#3a3a3a','stroke-width':1}));
+  // sound hole
+  discWrap.appendChild(el('circle',{cx:cx,cy:cy,r:2.5,fill:'#000',stroke:'#555','stroke-width':1}));
+  txt(discWrap, cx, cy+r+10, '+', 9, 'var(--rail-red)', 700, colX(27)-cx+cx);
+  g.appendChild(discWrap);
+
+  buzzRef = {group:g, sound};
+  gComp.appendChild(g);
+  hoverName(g, 'Piezo-Buzzer  ·  GPIO 14');
+}
+
+/* ---- Temperature sensor TO-92 (3 legs): VCC, OUT, GND ---- */
+function drawTempSensor(){
+  const g = el('g',{class:'comp-hit'});
+  const cx = colX(11), cy = 405, w=26;     // sits on bottom rails area visually; legs into J
+  // We'll actually place it referencing bottom block rows H..J cols 10,11,12
+  const baseY = rowY.J;
+  g.appendChild(leg(colX(10), baseY, colX(10), cy, '#b8b3a3'));   // VCC
+  g.appendChild(leg(colX(11), baseY, colX(11), cy, '#b8b3a3'));   // OUT
+  g.appendChild(leg(colX(12), baseY, colX(12), cy, '#b8b3a3'));   // GND
+  // TO-92 body: flat-faced half circle (black)
+  g.appendChild(el('path',{
+    d:`M ${cx-w/2} ${cy} A ${w/2} ${w/2} 0 0 1 ${cx+w/2} ${cy} Z`,
+    fill:'#222','stroke':'#000','stroke-width':1}));
+  g.appendChild(el('rect',{x:cx-w/2,y:cy-2,width:w,height:4,fill:'#222'}));
+  txt(g, cx, cy-9, 'LM35', 7, 'var(--esp-silk)', 700);
+  // pin guide labels
+  txt(g, colX(10), cy+14, 'V', 6, '#cc2b2b', 700);
+  txt(g, colX(11), cy+14, 'S', 6, '#2f9e44', 700);
+  txt(g, colX(12), cy+14, 'G', 6, '#9aa', 700);
+
+  gComp.appendChild(g);
+  hoverName(g, 'Temperatursensor LM35  ·  GPIO 34 (ADC)');
+}
+
+function txt(parent,x,y,str,size,fill,weight=400){
+  const t=el('text',{x:x,y:y,'text-anchor':'middle',
+    'font-family':'Courier New, monospace','font-size':size,fill:fill,'font-weight':weight});
+  t.textContent=str; parent.appendChild(t); return t;
+}
+
+/* =====================================================================
+   WIRING PLAN  (this is the "Verbindungen" spec, made concrete)
+   ESP32 power: pin col7 bottom(F7) -> we route rails.
+   For clarity we connect:
+     3V3 rail feed  : TP3  -> F7  (red, into ESP 3v3 pin region)
+     GND rail feed  : TM3  -> E7  (black)
+   RGB LED:
+     GPIO25(R) E13 -> A22   ;  GPIO26(G) E14 -> A23 ; GPIO27(B) E15 -> A25
+     LED cathode A24 -> TM rail (GND)
+   Buzzer:
+     GPIO14 F17 -> J27 (signal) ; buzzer GND J28 -> BM rail
+   Temp sensor:
+     VCC J10 -> BP rail (3v3) ; OUT J11 -> F18 (GPIO34) ; GND J12 -> BM rail
+   ===================================================================== */
+function drawWires(){
+  // --- ESP32 supply ---
+  addWire('TP3','F7','pwr','esp3v3');     // 3V3 into ESP
+  addWire('TM5','E7','gnd','espgnd');     // GND from ESP to minus rail
+
+  // bridge the two minus rails + plus rails so whole board shares nets
+  addWire('TM11','BM11','gnd','railbridgeM');
+  addWire('TP13','BP13','pwr','railbridgeP');
+
+  // --- RGB LED signal legs (GPIO 25/26/27) ---
+  addWire('E13','A22','gpio','ledR');     // GPIO25 -> R
+  addWire('E14','A23','gpio','ledG');     // GPIO26 -> G
+  addWire('E15','A25','gpio','ledB');     // GPIO27 -> B
+  addWire('A24','TM20','gnd','ledK');     // common cathode -> GND rail
+
+  // --- Buzzer ---
+  addWire('F17','J27','gpio','buzzSig');  // GPIO14 -> buzzer +
+  addWire('J28','BM23','gnd','buzzGnd');  // buzzer - -> GND rail
+
+  // --- Temp sensor ---
+  addWire('J10','BP9','pwr','tmpVcc');    // VCC -> 3V3 rail
+  addWire('J11','F18','sig','tmpOut');    // OUT -> GPIO34
+  addWire('J12','BM15','gnd','tmpGnd');   // GND -> GND rail
+}
+
+/* which wires belong to which subsystem (for "live" highlighting) */
+const NET_GROUPS = {
+  supply : ['esp3v3','espgnd','railbridgeM','railbridgeP'],
+  led    : ['ledR','ledG','ledB','ledK'],
+  buzz   : ['buzzSig','buzzGnd'],
+  temp   : ['tmpVcc','tmpOut','tmpGnd']
+};
+
+/* =====================================================================
+   BUILD EVERYTHING
+   ===================================================================== */
+drawBody();
+drawHoles();
+drawLabels();
+drawWires();
+drawESP();
+drawRGBLed();
+drawBuzzer();
+drawTempSensor();
+
+/* =====================================================================
+   INTERACTION + SIMULATION
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const audioState = { ctx:null, osc:null, gain:null };
+
+function setWireLive(ids, live){
+  wires.forEach(w=>{
+    if(ids.includes(w.id)){
+      w.path.classList.toggle('live', live);
+      w.dash.style.opacity = live ? 0.9 : 0;
+    }
+  });
+}
+
+function startTone(){
+  try{
+    if(!audioState.ctx) audioState.ctx = new (window.AudioContext||window.webkitAudioContext)();
+    if(audioState.osc) return;
+    const o = audioState.ctx.createOscillator();
+    const gnode = audioState.ctx.createGain();
+    o.type='square'; o.frequency.value=2000;
+    gnode.gain.value=0.04;
+    o.connect(gnode); gnode.connect(audioState.ctx.destination);
+    o.start();
+    audioState.osc=o; audioState.gain=gnode;
+  }catch(e){}
+}
+function stopTone(){
+  if(audioState.osc){ try{audioState.osc.stop();}catch(e){} audioState.osc=null; audioState.gain=null; }
+}
+
+const LED_FILL = {
+  off:'#3a3a3a', red:'#ff2d20', green:'#23d05a', blue:'#1f8bff',
+  white:'#fff4d6'
+};
+const LED_GLOW = {
+  red:'#ff5b50', green:'#4dff86', blue:'#5cb0ff', white:'#ffffff'
+};
+
+function simulate(){
+  const powered = state.power;
+
+  // ---- supply net ----
+  setWireLive(NET_GROUPS.supply, powered);
+
+  // ---- RGB LED ----
+  const ledLit = powered && state.ledColor!=='off';
+  ledRef.group.classList.toggle('led-on', ledLit);
+  ledRef.dome.setAttribute('fill', ledLit ? LED_FILL[state.ledColor] : '#3a3a3a');
+  if(ledLit){
+    ledRef.glow.setAttribute('fill', LED_GLOW[state.ledColor]||'#fff');
+    ledRef.dome.style.filter = `drop-shadow(0 0 10px ${LED_GLOW[state.ledColor]||'#fff'})`;
+  } else {
+    ledRef.dome.style.filter = 'none';
+  }
+  // light only the active color legs (R/G/B) + always the GND return when lit
+  const activeLegs = [];
+  if(state.ledColor==='red')   activeLegs.push('ledR');
+  if(state.ledColor==='green') activeLegs.push('ledG');
+  if(state.ledColor==='blue')  activeLegs.push('ledB');
+  if(state.ledColor==='white') activeLegs.push('ledR','ledG','ledB');
+  setWireLive(['ledR','ledG','ledB'], false);
+  setWireLive(activeLegs, ledLit);
+  setWireLive(['ledK'], ledLit);
+
+  // ---- Buzzer ----
+  const buzzing = powered && state.buzzer;
+  buzzRef.group.classList.toggle('buzzing', buzzing);
+  setWireLive(NET_GROUPS.buzz, buzzing);
+  if(buzzing) startTone(); else stopTone();
+
+  // ---- Temp sensor (always reads when powered) ----
+  setWireLive(NET_GROUPS.temp, powered);
+
+  // ---- readouts ----
+  $('r-power').textContent = powered ? '3.30 V' : '0.00 V';
+  $('r-led').textContent   = ledLit ? state.ledColor.toUpperCase() : 'AUS';
+  $('r-buzz').textContent  = buzzing ? '2.0 kHz' : 'AUS';
+  const adc = Math.round((state.temp + 10) / 60 * 4095); // -10..50 -> 0..4095
+  $('r-temp').textContent  = powered ? `${state.temp}°C / ${adc}` : '— / —';
+
+  const anyActive = ledLit || buzzing;
+  const pill = $('r-pill');
+  if(!powered){ pill.textContent='STROMLOS'; pill.className='status-pill pill-off'; }
+  else if(anyActive){ pill.textContent='AKTIV'; pill.className='status-pill pill-on'; }
+  else { pill.textContent='BEREIT'; pill.className='status-pill pill-off'; }
+}
+
+/* ---- control bindings ---- */
+$('power').addEventListener('click', e=>{
+  state.power = !state.power;
+  e.currentTarget.setAttribute('aria-pressed', state.power);
+  if(!state.power) stopTone();
+  simulate();
+});
+
+$('buzzer').addEventListener('click', e=>{
+  // resume audio context on user gesture
+  if(!audioState.ctx){ try{ audioState.ctx=new(window.AudioContext||window.webkitAudioContext)(); }catch(_){} }
+  if(audioState.ctx && audioState.ctx.state==='suspended') audioState.ctx.resume();
+  state.buzzer = !state.buzzer;
+  e.currentTarget.setAttribute('aria-pressed', state.buzzer);
+  simulate();
+});
+
+document.querySelectorAll('.swatch').forEach(sw=>{
+  sw.addEventListener('click', ()=>{
+    state.ledColor = sw.dataset.col;
+    document.querySelectorAll('.swatch').forEach(s=>s.setAttribute('aria-pressed', s===sw));
+    simulate();
+  });
+});
+
+$('temp').addEventListener('input', e=>{
+  state.temp = parseInt(e.target.value,10);
+  simulate();
+});
+
+/* =====================================================================
+   HOVER COORDINATE BADGE
+   ===================================================================== */
+const badge = $('coord-badge');
+function hoverName(group, name){
+  group.addEventListener('mousemove', ev=>{
+    badge.textContent = name;
+    badge.style.left = (ev.clientX+14)+'px';
+    badge.style.top  = (ev.clientY+14)+'px';
+    badge.style.opacity = 1;
+  });
+  group.addEventListener('mouseleave', ()=> badge.style.opacity=0);
+}
+
+/* hovering holes shows coordinate — build an invisible hit layer */
+(function buildHoleHover(){
+  for(const key in SOCK){
+    const {x,y}=SOCK[key];
+    const hit = el('circle',{cx:x,cy:y,r:7,fill:'transparent'});
+    hit.addEventListener('mousemove', ev=>{
+      badge.textContent = 'Position ' + key;
+      badge.style.left=(ev.clientX+14)+'px';
+      badge.style.top=(ev.clientY+14)+'px';
+      badge.style.opacity=1;
+    });
+    hit.addEventListener('mouseleave', ()=> badge.style.opacity=0);
+    gOver.appendChild(hit);
+  }
+})();
+
+/* initial render */
+simulate();
+</script>
+</body>
+</html>

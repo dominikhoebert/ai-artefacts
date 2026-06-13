@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 800 600" width="800" height="600">
+  <rect x="0" y="0" width="800" height="600" fill="#ffffff"/>
+
+  <!-- ============ WIRES (stroke-width 1.5) ============ -->
+  <g stroke="#000000" stroke-width="1.5" fill="none">
+    <!-- 3V3 net -->
+    <path d="M500,80 V415"/>
+    <path d="M500,80 H615"/>
+    <path d="M440,210 H500"/>
+    <path d="M500,160 H620"/>
+    <path d="M500,415 H620"/>
+    <!-- GND net -->
+    <path d="M465,215 V445"/>
+    <path d="M440,410 H465"/>
+    <path d="M465,215 H620"/>
+    <path d="M465,445 H620"/>
+    <!-- C1 leads -->
+    <path d="M465,370 H478"/>
+    <path d="M486,370 H500"/>
+    <!-- DATA net -->
+    <path d="M515,132 V260"/>
+    <path d="M440,260 H515"/>
+    <path d="M515,188 H620"/>
+    <!-- SCL net -->
+    <path d="M565,132 V470"/>
+    <path d="M440,310 H565"/>
+    <path d="M565,470 H620"/>
+    <!-- SDA net -->
+    <path d="M615,132 V498"/>
+    <path d="M440,360 H615"/>
+    <path d="M615,498 H620"/>
+    <!-- resistor top leads -->
+    <path d="M515,80 V92"/>
+    <path d="M565,80 V92"/>
+    <path d="M615,80 V92"/>
+    <!-- V1 source wiring -->
+    <path d="M140,250 H255"/>
+    <path d="M140,250 V278"/>
+    <path d="M140,360 H255"/>
+    <path d="M140,322 V360"/>
+  </g>
+
+  <!-- ============ COMPONENT OUTLINES (stroke-width 2) ============ -->
+  <g stroke="#000000" stroke-width="2" fill="none">
+    <!-- ESP32 module -->
+    <rect x="255" y="160" width="185" height="315" fill="#ffffff"/>
+    <!-- DHT11 sensor -->
+    <rect x="620" y="140" width="120" height="95" fill="#ffffff"/>
+    <!-- OLED display -->
+    <rect x="620" y="400" width="120" height="120" fill="#ffffff"/>
+
+    <!-- R1 (DATA pull-up) zigzag -->
+    <path d="M515,92 L510,98 L520,106 L510,114 L520,122 L510,128 L515,132"/>
+    <!-- R2 (SCL pull-up) zigzag -->
+    <path d="M565,92 L560,98 L570,106 L560,114 L570,122 L560,128 L565,132"/>
+    <!-- R3 (SDA pull-up) zigzag -->
+    <path d="M615,92 L610,98 L620,106 L610,114 L620,122 L610,128 L615,132"/>
+
+    <!-- C1 capacitor plates -->
+    <path d="M478,362 V378"/>
+    <path d="M486,362 V378"/>
+
+    <!-- V1 voltage source -->
+    <circle cx="140" cy="300" r="22" fill="#ffffff"/>
+    <path d="M132,290 H148"/>
+    <path d="M140,283 V297"/>
+    <path d="M131,312 H149"/>
+  </g>
+
+  <!-- ============ JUNCTION DOTS ============ -->
+  <g fill="#000000">
+    <circle cx="500" cy="210" r="3"/>
+    <circle cx="500" cy="160" r="3"/>
+    <circle cx="500" cy="370" r="3"/>
+    <circle cx="465" cy="410" r="3"/>
+    <circle cx="465" cy="370" r="3"/>
+    <circle cx="515" cy="188" r="3"/>
+    <circle cx="565" cy="310" r="3"/>
+    <circle cx="615" cy="360" r="3"/>
+    <circle cx="515" cy="80" r="3"/>
+    <circle cx="565" cy="80" r="3"/>
+  </g>
+
+  <!-- ============ LABELS ============ -->
+  <g fill="#000000" font-family="monospace">
+    <!-- Module / component titles -->
+    <text x="347" y="190" font-size="14" font-weight="bold" text-anchor="middle">ESP32</text>
+    <text x="680" y="132" font-size="13" font-weight="bold" text-anchor="middle">DHT11</text>
+    <text x="680" y="392" font-size="13" font-weight="bold" text-anchor="middle">OLED SSD1306</text>
+
+    <!-- ESP32 right-side pins -->
+    <g font-size="11" text-anchor="end">
+      <text x="434" y="214">3V3</text>
+      <text x="434" y="264">GPIO4</text>
+      <text x="434" y="314">GPIO22</text>
+      <text x="434" y="364">GPIO21</text>
+      <text x="434" y="414">GND</text>
+    </g>
+    <!-- ESP32 left-side pins -->
+    <g font-size="11" text-anchor="start">
+      <text x="261" y="254">5V</text>
+      <text x="261" y="364">GND</text>
+    </g>
+
+    <!-- DHT11 pins -->
+    <g font-size="11" text-anchor="start">
+      <text x="626" y="164">VCC</text>
+      <text x="626" y="192">DATA</text>
+      <text x="626" y="219">GND</text>
+    </g>
+    <!-- OLED pins -->
+    <g font-size="11" text-anchor="start">
+      <text x="626" y="419">VCC</text>
+      <text x="626" y="449">GND</text>
+      <text x="626" y="474">SCL</text>
+      <text x="626" y="502">SDA</text>
+    </g>
+
+    <!-- Resistor designators / values -->
+    <g font-size="11" text-anchor="start">
+      <text x="524" y="106">R1</text>
+      <text x="524" y="120">10kΩ</text>
+      <text x="574" y="106">R2</text>
+      <text x="574" y="120">4.7kΩ</text>
+      <text x="624" y="106">R3</text>
+      <text x="624" y="120">4.7kΩ</text>
+    </g>
+
+    <!-- Capacitor -->
+    <text x="482" y="358" font-size="11" text-anchor="middle">C1</text>
+    <text x="508" y="374" font-size="11" text-anchor="start">100nF</text>
+
+    <!-- Voltage source -->
+    <g font-size="11" text-anchor="end">
+      <text x="112" y="296">V1</text>
+      <text x="112" y="310">5V</text>
+    </g>
+
+    <!-- Net label -->
+    <text x="505" y="74" font-size="11" text-anchor="start">+3V3</text>
+
+    <!-- Subtitle -->
+    <text x="20" y="585" font-size="11" text-anchor="start">ESP32 + DHT11 + SSD1306 OLED (I2C)</text>
+  </g>
+</svg>
