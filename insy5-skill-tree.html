@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INSY 1. Semester – Datenbanken</title>
+<style>
+:root{
+  --bg:#09090f;
+  --surface:#111119;
+  --surface-raised:#18182a;
+  --border:#22223a;
+  --text:#e4e4f0;
+  --text-muted:#5c5c7a;
+  --accent:#6366f1;
+  --accent-glow:rgba(99,102,241,0.25);
+  --success:#22c55e;
+  --success-glow:rgba(34,197,94,0.25);
+  --locked:#1e1e2e;
+  /* EK / optional (Amber) */
+  --ek-accent:#f59e0b;
+  --ek-glow:rgba(245,158,11,0.25);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- Header ---------- */
+.header{
+  position:fixed;top:0;left:0;right:0;height:60px;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;
+  background:rgba(9,9,15,0.85);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+}
+.header-left{display:flex;flex-direction:column;gap:2px;min-width:0}
+.header-title{font-size:16px;font-weight:600;line-height:1.1}
+.header-subject{font-size:12px;color:var(--text-muted)}
+.header-right{display:flex;align-items:center;gap:16px}
+.progress-wrap{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.progress-text{font-size:12px;color:var(--text-muted)}
+.progress-bar{width:140px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;width:0;background:var(--accent);border-radius:2px;transition:width 400ms ease}
+.icon-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:8px;
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-muted);cursor:pointer;transition:all 150ms ease;
+}
+.icon-btn:hover{color:var(--text);border-color:var(--accent);background:var(--surface-raised)}
+
+/* ---------- Legend ---------- */
+.legend{
+  position:fixed;bottom:16px;left:16px;z-index:40;
+  display:flex;gap:18px;align-items:center;
+  padding:10px 14px;border-radius:10px;
+  background:rgba(17,17,25,0.85);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid var(--border);font-size:12px;color:var(--text-muted);
+}
+.legend-item{display:flex;gap:7px;align-items:center}
+.legend-dot{width:11px;height:11px;border-radius:3px;border:1.5px solid}
+.legend-dot.gk{border-color:var(--accent);background:var(--accent-glow)}
+.legend-dot.ek{border-color:var(--ek-accent);background:var(--ek-glow)}
+
+/* ---------- Canvas ---------- */
+.canvas-wrapper{
+  position:absolute;inset:0;padding-top:60px;
+  overflow:auto;
+}
+.canvas{position:relative}
+.edges{position:absolute;top:0;left:0;z-index:0;pointer-events:none}
+.edge{fill:none;stroke-width:2;transition:stroke 400ms ease,opacity 400ms ease}
+.edge.locked{stroke:var(--border);opacity:1}
+.edge.available{stroke:var(--accent);opacity:.6}
+.edge.available.ek{stroke:var(--ek-accent)}
+.edge.completed{stroke:var(--success);opacity:.7}
+
+/* ---------- Node ---------- */
+.skill-node{
+  position:absolute;width:180px;height:88px;border-radius:10px;
+  z-index:1;padding:12px 14px;
+  display:flex;flex-direction:column;justify-content:center;gap:5px;
+  border:1.5px solid var(--border);
+  background:var(--locked);
+  transition:transform 150ms ease,box-shadow 150ms ease,border-color 400ms ease,background 300ms ease;
+}
+.skill-node .node-head{display:flex;align-items:center;gap:8px}
+.skill-node .node-icon{flex:0 0 auto;display:flex;color:var(--text-muted)}
+.skill-node .node-title{
+  font-size:13px;font-weight:600;line-height:1.2;color:var(--text-muted);
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+}
+.skill-node .node-badge{
+  font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 6px;border-radius:5px;align-self:flex-start;
+  color:var(--text-muted);border:1px solid var(--border);
+}
+
+/* locked */
+.skill-node.locked{cursor:default}
+
+/* available – Pflicht (GK) */
+.skill-node.available{
+  background:var(--surface-raised);
+  border-color:var(--accent);
+  box-shadow:0 0 0 4px var(--accent-glow);
+  cursor:pointer;
+}
+.skill-node.available .node-title{color:var(--text)}
+.skill-node.available .node-icon{color:var(--accent)}
+.skill-node.available .node-badge{color:var(--accent);border-color:var(--accent)}
+.skill-node.available::after{
+  content:"";position:absolute;inset:-1.5px;border-radius:10px;
+  border:1.5px solid var(--accent);pointer-events:none;
+  animation:pulse 2s ease-out infinite;
+}
+.skill-node.available:hover{transform:translateY(-2px);box-shadow:0 0 0 5px var(--accent-glow),0 8px 24px rgba(0,0,0,.4)}
+
+/* available – optional (EK / Amber) */
+.skill-node.available.ek{border-color:var(--ek-accent);box-shadow:0 0 0 4px var(--ek-glow)}
+.skill-node.available.ek .node-icon{color:var(--ek-accent)}
+.skill-node.available.ek .node-badge{color:var(--ek-accent);border-color:var(--ek-accent)}
+.skill-node.available.ek::after{border-color:var(--ek-accent);animation:pulse-ek 2s ease-out infinite}
+.skill-node.available.ek:hover{box-shadow:0 0 0 5px var(--ek-glow),0 8px 24px rgba(0,0,0,.4)}
+
+/* completed */
+.skill-node.completed{
+  background:linear-gradient(135deg,#0f2a1a,#0a1f12);
+  border-color:var(--success);
+  box-shadow:0 0 0 4px var(--success-glow);
+  cursor:pointer;
+}
+.skill-node.completed .node-title{color:var(--text)}
+.skill-node.completed .node-icon{color:var(--success)}
+.skill-node.completed .node-badge{color:var(--success);border-color:var(--success)}
+.skill-node.completed:hover{transform:translateY(-2px)}
+
+/* burst (einmalig beim Abschließen) */
+.skill-node.burst{animation:complete-pop 350ms ease-out}
+.skill-node .glow-burst{
+  content:"";position:absolute;inset:-1.5px;border-radius:10px;
+  border:2px solid var(--success);pointer-events:none;
+  animation:glow-burst 400ms ease-out forwards;
+}
+
+/* neu freigeschaltet */
+.skill-node.just-unlocked{animation:fade-in-up 300ms ease-out 200ms both}
+
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 var(--accent-glow);opacity:1}
+  70%{box-shadow:0 0 0 8px rgba(99,102,241,0);opacity:0}
+  100%{box-shadow:0 0 0 8px rgba(99,102,241,0);opacity:0}
+}
+@keyframes pulse-ek{
+  0%{box-shadow:0 0 0 0 var(--ek-glow);opacity:1}
+  70%{box-shadow:0 0 0 8px rgba(245,158,11,0);opacity:0}
+  100%{box-shadow:0 0 0 8px rgba(245,158,11,0);opacity:0}
+}
+@keyframes complete-pop{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+@keyframes glow-burst{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+@keyframes fade-in-up{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+
+/* particle */
+.particle{position:fixed;border-radius:50%;background:var(--success);z-index:200;pointer-events:none}
+
+/* ---------- Tooltip ---------- */
+.req-tooltip{
+  position:fixed;z-index:120;max-width:240px;
+  background:var(--surface-raised);border:1px solid var(--border);
+  border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+  animation:fade-in-up 200ms ease-out;
+}
+.req-tooltip .req-label{color:var(--text-muted);font-size:11px;margin-bottom:3px}
+
+/* ---------- Modal ---------- */
+.overlay{
+  position:fixed;inset:0;z-index:100;display:none;
+  align-items:center;justify-content:center;padding:20px;
+  background:rgba(0,0,0,0.7);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+}
+.overlay.open{display:flex}
+.modal{
+  position:relative;width:100%;max-width:400px;
+  background:var(--surface-raised);border:1px solid var(--border);
+  border-radius:14px;padding:24px;
+  box-shadow:0 24px 60px rgba(0,0,0,.6);
+  animation:fade-in-up 200ms ease-out;
+}
+.modal-badge{
+  display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-bottom:12px;
+}
+.modal-badge.gk{color:var(--accent);border:1px solid var(--accent)}
+.modal-badge.ek{color:var(--ek-accent);border:1px solid var(--ek-accent)}
+.modal-title{font-size:18px;font-weight:600;margin-bottom:10px;padding-right:28px}
+.modal-desc{font-size:14px;color:var(--text-muted);line-height:1.5;margin-bottom:20px}
+.modal-actions{display:flex;flex-direction:column;gap:10px}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:11px 16px;border-radius:9px;font-size:14px;font-weight:600;
+  border:1px solid transparent;cursor:pointer;transition:all 150ms ease;text-decoration:none;
+}
+.btn-link{background:var(--surface);border-color:var(--border);color:var(--text)}
+.btn-link:hover{border-color:var(--accent);background:var(--surface-raised)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-primary.ek{background:var(--ek-accent);color:#1a1205}
+.btn-reset{background:transparent;border-color:var(--border);color:var(--text-muted)}
+.btn-reset:hover{color:var(--text);border-color:var(--text-muted)}
+.modal-close{
+  position:absolute;top:16px;right:16px;width:30px;height:30px;
+  display:flex;align-items:center;justify-content:center;
+  background:transparent;border:none;color:var(--text-muted);cursor:pointer;
+  border-radius:7px;transition:all 150ms ease;
+}
+.modal-close:hover{color:var(--text);background:var(--surface)}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-left">
+    <span class="header-title" id="hTitle"></span>
+    <span class="header-subject" id="hSubject"></span>
+  </div>
+  <div class="header-right">
+    <div class="progress-wrap">
+      <span class="progress-text" id="progressText"></span>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+    <button class="icon-btn" id="resetBtn" title="Fortschritt zurücksetzen">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<div class="canvas-wrapper" id="canvasWrapper">
+  <div class="canvas" id="canvas">
+    <svg class="edges" id="edges"></svg>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot gk"></span>Pflicht (GK)</div>
+  <div class="legend-item"><span class="legend-dot ek"></span>Optional (EK)</div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+const CONFIG = {
+  title: "INSY – Datenbanken",
+  subject: "Informatik – 1. Semester",
+};
+
+const SKILLS = [
+  // 11 Einfache Abfragen (Pflicht, Start)
+  { id:"gk11", title:"GK11 Einfache Abfragen", type:"gk",
+    description:"Grundlagen einfacher Datenbankabfragen.",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/11_Einfache_Abfragen/GK11_Einfache_Abfragen/",
+    requires:[], col:1, row:0 },
+
+  // 12 Datenmodellierung
+  { id:"gk12", title:"GK12 Datenmodellierung", type:"gk",
+    description:"Grundlagen der Datenmodellierung (aus GEK12).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/12_Datenmodellierung/GEK12_Datenmodellierung/",
+    requires:["gk11"], col:1, row:1 },
+  { id:"ek12", title:"EK12 Datenmodellierung", type:"ek",
+    description:"Erweiterte Datenmodellierung (eigenständiges EK12).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/12_Datenmodellierung/EK12_Datenmodellierung/",
+    requires:["gk11"], col:0, row:1 },
+  { id:"ek12gek", title:"EK12 Datenmodellierung+", type:"ek",
+    description:"Erweiterungsteil der Datenmodellierung (aus GEK12).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/12_Datenmodellierung/GEK12_Datenmodellierung/",
+    requires:["gk12"], col:2, row:1 },
+
+  // 13 Datenbanksystem Installation (aus GEK13)
+  { id:"gk13", title:"GK13 DB-System Installation", type:"gk",
+    description:"Installation eines Datenbanksystems (aus GEK13).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/13_Datenbanksystem_Installation/GEK13_Datenbanksystem_Installation/",
+    requires:["gk12"], col:1, row:2 },
+  { id:"ek13", title:"EK13 DB-System Installation", type:"ek",
+    description:"Erweiterungsteil zur DB-System-Installation (aus GEK13).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/13_Datenbanksystem_Installation/GEK13_Datenbanksystem_Installation/",
+    requires:["gk13"], col:2, row:2 },
+
+  // 14 Logische Modellierung (aus GEK14)
+  { id:"gk14", title:"GK14 Logische Modellierung", type:"gk",
+    description:"Logische Datenmodellierung (aus GEK14).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/14_Logische_Modellierung/GEK14_Logische_Modellierung/",
+    requires:["gk13"], col:1, row:3 },
+  { id:"ek14", title:"EK14 Logische Modellierung", type:"ek",
+    description:"Erweiterungsteil der logischen Modellierung (aus GEK14).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/14_Logische_Modellierung/GEK14_Logische_Modellierung/",
+    requires:["gk14"], col:2, row:3 },
+
+  // 16 Normalformen (Pflicht, ← 14)
+  { id:"gk16", title:"GK16 Normalformen", type:"gk",
+    description:"Normalisierung und Normalformen von Datenbanken.",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/16_Normalformen/GK16_Normalformen/",
+    requires:["gk14"], col:0, row:4 },
+
+  // 17 InfluxDB (optional, ← 14)
+  { id:"ek17", title:"EK17 InfluxDB", type:"ek",
+    description:"Zeitreihendatenbank InfluxDB (optional).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/17_InfluxDB/EK17_InfluxDB/",
+    requires:["gk14"], col:2, row:4 },
+
+  // 15 Semistrukturierte Datentypen (aus GEK15, eigener Strang ohne Abhängigkeit)
+  { id:"gk15", title:"GK15 Semistrukt. Datentypen", type:"gk",
+    description:"Semistrukturierte Datentypen (aus GEK15).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/15_Semistrukturierte_Datentypen/GEK15_Semistrukturierte_Datentypen/",
+    requires:[], col:3, row:0 },
+  { id:"ek15", title:"EK15 Semistrukt. Datentypen", type:"ek",
+    description:"Erweiterungsteil semistrukturierter Datentypen (aus GEK15).",
+    link:"https://tgm-hit.github.io/insy-exercises/1.Semester/15_Semistrukturierte_Datentypen/GEK15_Semistrukturierte_Datentypen/",
+    requires:["gk15"], col:3, row:1 },
+];
+
+/* ---------- Konstanten ---------- */
+const NODE_W=180, NODE_H=88, COL_GAP=260, ROW_GAP=160, PAD=60;
+const STORAGE_KEY="skilltree_v1";
+
+/* ---------- Icons ---------- */
+const ICON_LOCK='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+const ICON_CHECK='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_X='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+
+/* ---------- State ---------- */
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return new Set();
+    const arr=JSON.parse(raw);
+    return new Set(Array.isArray(arr)?arr:[]);
+  }catch(e){ return new Set(); }
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...state]));
+}
+
+/* ---------- Lookups ---------- */
+const byId = Object.fromEntries(SKILLS.map(s=>[s.id,s]));
+const dependents = {};
+SKILLS.forEach(s=>{ s.requires.forEach(r=>{ (dependents[r]=dependents[r]||[]).push(s.id); }); });
+
+function nodeStatus(s){
+  if(state.has(s.id)) return "completed";
+  const ready = s.requires.every(r=>state.has(r));
+  return ready ? "available" : "locked";
+}
+function nodeX(s){ return PAD + s.col*COL_GAP; }
+function nodeY(s){ return PAD + s.row*ROW_GAP; }
+function centerX(s){ return nodeX(s)+NODE_W/2; }
+
+/* ---------- Build canvas ---------- */
+const canvas=document.getElementById("canvas");
+const edgesSvg=document.getElementById("edges");
+
+function canvasSize(){
+  const maxCol=Math.max(...SKILLS.map(s=>s.col));
+  const maxRow=Math.max(...SKILLS.map(s=>s.row));
+  const w=Math.max(maxCol*COL_GAP+NODE_W+2*PAD, window.innerWidth);
+  const h=Math.max(maxRow*ROW_GAP+NODE_H+2*PAD, window.innerHeight-60);
+  return {w,h};
+}
+
+function buildEdges(){
+  const {w,h}=canvasSize();
+  edgesSvg.setAttribute("width",w);
+  edgesSvg.setAttribute("height",h);
+  let paths="";
+  SKILLS.forEach(s=>{
+    s.requires.forEach(reqId=>{
+      const from=byId[reqId];
+      const x1=centerX(from), y1=nodeY(from)+NODE_H;
+      const x2=centerX(s),    y2=nodeY(s);
+      const dy=(y2-y1)/2;
+      const d=`M ${x1} ${y1} C ${x1} ${y1+dy}, ${x2} ${y2-dy}, ${x2} ${y2}`;
+      const st=nodeStatus(s);
+      const ekCls=(st==="available"&&s.type==="ek")?" ek":"";
+      paths+=`<path class="edge ${st}${ekCls}" data-target="${s.id}" d="${d}"/>`;
+    });
+  });
+  edgesSvg.innerHTML=paths;
+}
+
+function buildNodes(){
+  const {w,h}=canvasSize();
+  canvas.style.width=w+"px";
+  canvas.style.height=h+"px";
+  SKILLS.forEach(s=>{
+    const el=document.createElement("div");
+    el.className="skill-node";
+    el.dataset.id=s.id;
+    el.style.left=nodeX(s)+"px";
+    el.style.top=nodeY(s)+"px";
+    el.innerHTML=`
+      <span class="node-badge">${s.type.toUpperCase()}</span>
+      <div class="node-head">
+        <span class="node-icon"></span>
+        <span class="node-title">${s.title}</span>
+      </div>`;
+    el.addEventListener("click",()=>onNodeClick(s.id));
+    canvas.appendChild(el);
+  });
+}
+
+function renderNode(s, opts={}){
+  const el=canvas.querySelector(`.skill-node[data-id="${s.id}"]`);
+  if(!el) return;
+  const st=nodeStatus(s);
+  el.classList.remove("locked","available","completed","ek","just-unlocked");
+  el.classList.add(st);
+  if(s.type==="ek") el.classList.add("ek");
+  if(opts.justUnlocked) el.classList.add("just-unlocked");
+  const icon=el.querySelector(".node-icon");
+  if(st==="completed") icon.innerHTML=ICON_CHECK;
+  else if(st==="locked") icon.innerHTML=ICON_LOCK;
+  else icon.innerHTML="";
+}
+
+function renderAll(animate={}){
+  SKILLS.forEach(s=>renderNode(s,{justUnlocked:animate[s.id]}));
+  buildEdges();
+  renderProgress();
+}
+
+function renderProgress(){
+  const total=SKILLS.length;
+  const done=SKILLS.filter(s=>state.has(s.id)).length;
+  document.getElementById("progressText").textContent=`${done} / ${total} erledigt`;
+  document.getElementById("progressFill").style.width=(total?done/total*100:0)+"%";
+}
+
+/* ---------- Click handling ---------- */
+function onNodeClick(id){
+  const s=byId[id];
+  const st=nodeStatus(s);
+  if(st==="locked") showReqTooltip(s);
+  else openModal(s,st);
+}
+
+let tooltipTimer=null, currentTooltip=null;
+function showReqTooltip(s){
+  hideTooltip();
+  const el=canvas.querySelector(`.skill-node[data-id="${s.id}"]`);
+  const rect=el.getBoundingClientRect();
+  const names=s.requires.map(r=>byId[r].title).join(", ");
+  const tip=document.createElement("div");
+  tip.className="req-tooltip";
+  tip.innerHTML=`<div class="req-label">Benötigt:</div>${names}`;
+  document.body.appendChild(tip);
+  let top=rect.top-tip.offsetHeight-8;
+  if(top<68) top=rect.bottom+8;
+  let left=rect.left+rect.width/2-tip.offsetWidth/2;
+  left=Math.max(8,Math.min(left,window.innerWidth-tip.offsetWidth-8));
+  tip.style.top=top+"px"; tip.style.left=left+"px";
+  currentTooltip=tip;
+  tooltipTimer=setTimeout(hideTooltip,2500);
+}
+function hideTooltip(){
+  if(tooltipTimer){clearTimeout(tooltipTimer);tooltipTimer=null;}
+  if(currentTooltip){currentTooltip.remove();currentTooltip=null;}
+}
+
+/* ---------- Modal ---------- */
+const overlay=document.getElementById("overlay");
+const modal=document.getElementById("modal");
+
+function openModal(s,st){
+  const ekCls=s.type==="ek"?"ek":"gk";
+  let actions="";
+  if(s.link) actions+=`<a class="btn btn-link" href="${s.link}" target="_blank" rel="noopener">Übung öffnen →</a>`;
+  if(st==="completed"){
+    actions+=`<button class="btn btn-reset" id="modalReset">Zurücksetzen</button>`;
+  }else{
+    actions+=`<button class="btn btn-primary ${ekCls}" id="modalComplete">Als erledigt markieren ✓</button>`;
+  }
+  modal.innerHTML=`
+    <button class="modal-close" id="modalClose">${ICON_X}</button>
+    <span class="modal-badge ${ekCls}">${s.type==="ek"?"Optional · EK":"Pflicht · GK"}</span>
+    <h2 class="modal-title">${s.title}</h2>
+    <p class="modal-desc">${s.description}</p>
+    <div class="modal-actions">${actions}</div>`;
+  overlay.classList.add("open");
+  document.getElementById("modalClose").addEventListener("click",closeModal);
+  const cBtn=document.getElementById("modalComplete");
+  if(cBtn) cBtn.addEventListener("click",()=>{ closeModal(); completeSkill(s.id); });
+  const rBtn=document.getElementById("modalReset");
+  if(rBtn) rBtn.addEventListener("click",()=>{ closeModal(); resetSkill(s.id); });
+}
+function closeModal(){ overlay.classList.remove("open"); }
+overlay.addEventListener("click",e=>{ if(e.target===overlay) closeModal(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+
+/* ---------- Complete / reset ---------- */
+function completeSkill(id){
+  const before=new Set([...SKILLS.filter(s=>nodeStatus(s)==="available").map(s=>s.id)]);
+  state.add(id); saveState();
+  const el=canvas.querySelector(`.skill-node[data-id="${id}"]`);
+  // pop + glow burst
+  el.classList.remove("burst"); void el.offsetWidth; el.classList.add("burst");
+  const glow=document.createElement("span");
+  glow.className="glow-burst";
+  el.appendChild(glow);
+  setTimeout(()=>glow.remove(),420);
+  spawnParticles(el);
+  renderNode(byId[id]);
+  buildEdges();
+  renderProgress();
+  // neu freigeschaltete Knoten ermitteln
+  const animate={};
+  SKILLS.forEach(s=>{
+    if(nodeStatus(s)==="available" && !before.has(s.id)) animate[s.id]=true;
+  });
+  setTimeout(()=>{ SKILLS.forEach(s=>{ if(animate[s.id]) renderNode(s,{justUnlocked:true}); }); },0);
+}
+
+function resetSkill(id){
+  // transitiv alle Abhängigen finden
+  const toReset=new Set();
+  (function walk(x){
+    if(toReset.has(x)) return;
+    toReset.add(x);
+    (dependents[x]||[]).forEach(walk);
+  })(id);
+  toReset.forEach(x=>state.delete(x));
+  saveState();
+  renderAll();
+}
+
+function spawnParticles(el){
+  const rect=el.getBoundingClientRect();
+  const cx=rect.left+rect.width/2, cy=rect.top+rect.height/2;
+  for(let i=0;i<12;i++){
+    const p=document.createElement("div");
+    p.className="particle";
+    const size=4+Math.random()*2;
+    p.style.width=size+"px"; p.style.height=size+"px";
+    p.style.left=cx+"px"; p.style.top=cy+"px";
+    document.body.appendChild(p);
+    const angle=Math.random()*Math.PI*2;
+    const dist=40+Math.random()*60;
+    const dx=Math.cos(angle)*dist, dy=Math.sin(angle)*dist;
+    requestAnimationFrame(()=>{
+      p.style.transition="transform 600ms ease-out,opacity 600ms ease-out";
+      p.style.transform=`translate(${dx}px,${dy}px)`;
+      p.style.opacity="0";
+    });
+    setTimeout(()=>p.remove(),650);
+  }
+}
+
+/* ---------- Reset all ---------- */
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  if(window.confirm("Gesamten Fortschritt zurücksetzen?")){
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+});
+
+/* ---------- Init ---------- */
+document.getElementById("hTitle").textContent=CONFIG.title;
+document.getElementById("hSubject").textContent=CONFIG.subject;
+document.title=CONFIG.title;
+
+buildNodes();
+renderAll();
+window.addEventListener("resize",()=>{ buildEdges(); const{w,h}=canvasSize(); canvas.style.width=w+"px"; canvas.style.height=h+"px"; });
+window.addEventListener("scroll",hideTooltip,true);
+</script>
+</body>
+</html>
