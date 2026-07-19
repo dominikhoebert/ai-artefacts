@@ -1,0 +1,406 @@
+
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+							<style>
+								body {
+									background-color: white; /* Ensure the iframe has a white background */
+								}
+
+								
+							</style>
+                        </head>
+                        <body>
+                            <!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERD in Chen-Notation mit c-Notation</title>
+    <style>
+        :root {
+            --bg-color: #f7fafc;
+            --text-color: #2d3748;
+            --entity-fill: #ebf8ff;
+            --entity-stroke: #3182ce;
+            --relationship-fill: #fffaf0;
+            --relationship-stroke: #dd6b20;
+            --attribute-fill: #f0fff4;
+            --attribute-stroke: #38a169;
+            --pk-fill: #faf5ff;
+            --pk-stroke: #805ad5;
+            --line-color: #4a5568;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            color: #1a202c;
+        }
+
+        .subtitle {
+            margin-top: 0;
+            color: #4a5568;
+            margin-bottom: 25px;
+            text-align: center;
+            max-width: 800px;
+        }
+
+        .svg-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 15px;
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        svg {
+            display: block;
+        }
+
+        /* Linien-Styles für Optionalitäten */
+        .line-mandatory {
+            stroke: var(--line-color);
+            stroke-width: 2px;
+        }
+
+        .line-optional {
+            stroke: var(--line-color);
+            stroke-width: 2px;
+            stroke-dasharray: 6, 4; /* Gestrichelt für visuelle Unterstützung der c-Notation */
+        }
+
+        .line-attribute {
+            stroke: #a0aec0;
+            stroke-width: 1.2px;
+        }
+
+        /* Entitäten, Beziehungen, Attribute */
+        .entity {
+            fill: var(--entity-fill);
+            stroke: var(--entity-stroke);
+            stroke-width: 2px;
+            rx: 5px;
+            ry: 5px;
+            transition: all 0.2s ease;
+        }
+        .entity:hover {
+            fill: #bee3f8;
+            stroke-width: 3px;
+            cursor: pointer;
+        }
+
+        .relationship {
+            fill: var(--relationship-fill);
+            stroke: var(--relationship-stroke);
+            stroke-width: 2px;
+            transition: all 0.2s ease;
+        }
+        .relationship:hover {
+            fill: #ffeebc;
+            stroke-width: 3px;
+            cursor: pointer;
+        }
+
+        .attribute {
+            fill: var(--attribute-fill);
+            stroke: var(--attribute-stroke);
+            stroke-width: 1.5px;
+            transition: all 0.2s ease;
+        }
+        .attribute:hover {
+            fill: #c6f6d5;
+            stroke-width: 2.5px;
+            cursor: pointer;
+        }
+
+        .pk {
+            fill: var(--pk-fill);
+            stroke: var(--pk-stroke);
+        }
+        .pk:hover {
+            fill: #e9d8fd;
+        }
+
+        .label {
+            font-size: 12px;
+            fill: #2d3748;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .pk-text {
+            font-weight: bold;
+            text-decoration: underline;
+        }
+
+        /* c-Notation Styles */
+        .c-notation {
+            font-size: 16px;
+            font-weight: bold;
+            fill: #e53e3e;
+        }
+
+        /* Info-Bereich */
+        .info-section {
+            margin-top: 30px;
+            max-width: 1000px;
+            width: 100%;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-card {
+            background: #f7fafc;
+            padding: 15px;
+            border-top: 4px solid var(--relationship-stroke);
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .info-card h4 {
+            margin-top: 0;
+            color: #e53e3e;
+            font-size: 20px;
+        }
+
+        .legend-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ER-Diagramm in Chen-Notation (c-Notation)</h1>
+    <p class="subtitle">Modellierung der optionalen und obligatorischen Beziehungen mittels der klassischen <strong>1-c-m-mc-Notation</strong>.</p>
+
+    <div class="svg-container">
+        <svg width="1250" height="800" viewBox="0 0 1250 800">
+            
+            <!-- VERBINDUNGSLINIEN ZU ATTRIBUTEN -->
+            <line class="line-attribute" x1="150" y1="700" x2="300" y2="700" />
+            <line class="line-attribute" x1="120" y1="425" x2="60" y2="310" />
+            <line class="line-attribute" x1="110" y1="430" x2="60" y2="370" />
+            <line class="line-attribute" x1="110" y1="470" x2="60" y2="520" />
+            <line class="line-attribute" x1="470" y1="430" x2="350" y2="340" />
+            <line class="line-attribute" x1="470" y1="470" x2="350" y2="540" />
+            <line class="line-attribute" x1="500" y1="475" x2="500" y2="555" />
+            <line class="line-attribute" x1="530" y1="470" x2="650" y2="540" />
+            <line class="line-attribute" x1="530" y1="430" x2="650" y2="340" />
+            <line class="line-attribute" x1="470" y1="130" x2="350" y2="90" />
+            <line class="line-attribute" x1="470" y1="170" x2="350" y2="210" />
+            <line class="line-attribute" x1="950" y1="125" x2="950" y2="50" />
+            <line class="line-attribute" x1="1000" y1="135" x2="1120" y2="90" />
+            <line class="line-attribute" x1="1015" y1="150" x2="1120" y2="150" />
+            <line class="line-attribute" x1="1000" y1="165" x2="1120" y2="210" />
+
+
+            <!-- STRUKTURELLE VERBINDUNGSLINIEN -->
+            
+            <!-- 1. Stall <-> gehört_zu <-> Box -->
+            <!-- Ein Stall kann mc (0..N) Boxen haben -->
+            <line class="line-optional" x1="150" y1="675" x2="150" y2="600" />
+            <!-- Eine Box muss zu genau 1 Stall gehören -->
+            <line class="line-mandatory" x1="150" y1="475" x2="150" y2="550" />
+
+            <!-- 2. Box <-> steht_in <-> Tier -->
+            <!-- In einer Box können mc (0..N) Tiere stehen -->
+            <line class="line-optional" x1="200" y1="450" x2="275" y2="450" />
+            <!-- Ein Tier steht in c (0..1) Box -->
+            <line class="line-optional" x1="375" y1="450" x2="450" y2="450" />
+
+            <!-- 3. Tier <-> bevorzugt <-> Futter -->
+            <!-- Ein Tier bevorzugt c (0..1) Futter -->
+            <line class="line-optional" x1="500" y1="425" x2="500" y2="312" />
+            <!-- Ein Futter wird von mc (0..N) Tieren bevorzugt -->
+            <line class="line-optional" x1="500" y1="262" x2="500" y2="175" />
+
+            <!-- 4. Futter <-> hergestellt von <-> Futterhersteller -->
+            <!-- Ein Futter stammt von genau 1 Hersteller -->
+            <line class="line-mandatory" x1="550" y1="150" x2="670" y2="150" />
+            <!-- Ein Hersteller stellt mc (0..N) Futter her -->
+            <line class="line-optional" x1="780" y1="150" x2="885" y2="150" />
+
+
+            <!-- BEZIEHUNGS-RAUTEN -->
+            <polygon class="relationship" points="150,550 200,575 150,600 100,575" />
+            <text class="label" x="150" y="579" text-anchor="middle">gehört zu</text>
+
+            <polygon class="relationship" points="325,425 375,450 325,475 275,450" />
+            <text class="label" x="325" y="454" text-anchor="middle">steht in</text>
+
+            <polygon class="relationship" points="500,262 555,287 500,312 445,287" />
+            <text class="label" x="500" y="291" text-anchor="middle">bevorzugt</text>
+
+            <polygon class="relationship" points="725,125 780,150 725,175 670,150" />
+            <text class="label" x="725" y="154" text-anchor="middle">hergestellt v.</text>
+
+
+            <!-- ENTITÄTEN -->
+            <rect class="entity" x="100" y="675" width="100" height="50" />
+            <text class="label" x="150" y="704" font-weight="bold" text-anchor="middle">Stall</text>
+
+            <rect class="entity" x="100" y="425" width="100" height="50" />
+            <text class="label" x="150" y="454" font-weight="bold" text-anchor="middle">Box</text>
+
+            <rect class="entity" x="450" y="425" width="100" height="50" />
+            <text class="label" x="500" y="454" font-weight="bold" text-anchor="middle">Tier</text>
+
+            <rect class="entity" x="450" y="125" width="100" height="50" />
+            <text class="label" x="500" y="154" font-weight="bold" text-anchor="middle">Futter</text>
+
+            <rect class="entity" x="885" y="125" width="130" height="50" />
+            <text class="label" x="950" y="154" font-weight="bold" text-anchor="middle">Futterhersteller</text>
+
+
+            <!-- ATTRIBUTE -->
+            <!-- Stall -->
+            <ellipse class="attribute pk" cx="300" cy="700" rx="50" ry="20" />
+            <text class="label pk-text" x="300" y="704" text-anchor="middle">Stall_ID</text>
+
+            <!-- Box -->
+            <ellipse class="attribute pk" cx="60" cy="310" rx="45" ry="20" />
+            <text class="label pk-text" x="60" y="314" text-anchor="middle">Box_ID</text>
+            <ellipse class="attribute" cx="60" cy="370" rx="45" ry="20" />
+            <text class="label" x="60" y="374" text-anchor="middle">Belag</text>
+            <ellipse class="attribute" cx="60" cy="520" rx="45" ry="20" />
+            <text class="label" x="60" y="524" text-anchor="middle">Art</text>
+
+            <!-- Tier -->
+            <ellipse class="attribute pk" cx="350" cy="340" rx="85" ry="22" />
+            <text class="label pk-text" x="350" y="344" text-anchor="middle">Zuchtregister-Nr.</text>
+            <ellipse class="attribute" cx="350" cy="540" rx="50" ry="20" />
+            <text class="label" x="350" y="544" text-anchor="middle">Name</text>
+            <ellipse class="attribute" cx="500" cy="555" rx="65" ry="20" />
+            <text class="label" x="500" y="559" text-anchor="middle">Geburtsdatum</text>
+            <ellipse class="attribute" cx="650" cy="540" rx="55" ry="20" />
+            <text class="label" x="650" y="544" text-anchor="middle">Schulterhöhe</text>
+            <ellipse class="attribute" cx="650" cy="340" rx="50" ry="20" />
+            <text class="label" x="650" y="344" text-anchor="middle">Gewicht</text>
+
+            <!-- Futter -->
+            <ellipse class="attribute pk" cx="350" cy="90" rx="50" ry="20" />
+            <text class="label pk-text" x="350" y="94" text-anchor="middle">Sorte</text>
+            <ellipse class="attribute" cx="350" cy="210" rx="50" ry="20" />
+            <text class="label" x="350" y="214" text-anchor="middle">Preis</text>
+
+            <!-- Futterhersteller -->
+            <ellipse class="attribute pk" cx="950" cy="50" rx="60" ry="20" />
+            <text class="label pk-text" x="950" y="54" text-anchor="middle">Name</text>
+            <ellipse class="attribute" cx="1120" cy="90" rx="60" ry="20" />
+            <text class="label" x="1120" y="94" text-anchor="middle">Anschrift</text>
+            <ellipse class="attribute" cx="1120" cy="150" rx="65" ry="20" />
+            <text class="label" x="1120" y="154" text-anchor="middle">Vertreter_Name</text>
+            <ellipse class="attribute" cx="1120" cy="210" rx="65" ry="20" />
+            <text class="label" x="1120" y="214" text-anchor="middle">Vertreter_Tel</text>
+
+
+            <!-- KARDINALITÄTEN (C-NOTATION) AN DEN LINIEN -->
+            <!-- Ein Stall hat mc (0..N) Boxen -->
+            <text class="c-notation" x="165" y="650">mc</text>
+            <!-- Eine Box gehört zu genau 1 Stall -->
+            <text class="c-notation" x="165" y="510">1</text>
+
+            <!-- Eine Box beherbergt mc (0..N) Tiere -->
+            <text class="c-notation" x="215" y="440">mc</text>
+            <!-- Ein Tier steht in maximal c (0..1) Box -->
+            <text class="c-notation" x="415" y="440">c</text>
+
+            <!-- Ein Tier bevorzugt maximal c (0..1) Futter -->
+            <text class="c-notation" x="515" y="410">c</text>
+            <!-- Ein Futter wird von mc (0..N) Tieren bevorzugt -->
+            <text class="c-notation" x="515" y="195">mc</text>
+
+            <!-- Ein Futter wird von genau 1 Hersteller bezogen -->
+            <text class="c-notation" x="560" y="140">1</text>
+            <!-- Ein Hersteller liefert mc (0..N) Futtersorten -->
+            <text class="c-notation" x="830" y="140">mc</text>
+
+        </svg>
+    </div>
+
+    <!-- LEGENDE DER C-NOTATION -->
+    <div class="legend-container">
+        <div class="legend-item">
+            <span style="color: #e53e3e; font-weight: bold; font-size: 18px;">1</span>
+            <span><strong>Genau Eins</strong> (Muss-Beziehung / [1,1])</span>
+        </div>
+        <div class="legend-item">
+            <span style="color: #e53e3e; font-weight: bold; font-size: 18px;">c</span>
+            <span><strong>Konditionell Eins / Can</strong> (Kann-Beziehung / [0,1])</span>
+        </div>
+        <div class="legend-item">
+            <span style="color: #e53e3e; font-weight: bold; font-size: 18px;">m</span>
+            <span><strong>Mehrere</strong> (Muss-Beziehung / [1,N])</span>
+        </div>
+        <div class="legend-item">
+            <span style="color: #e53e3e; font-weight: bold; font-size: 18px;">mc</span>
+            <span><strong>Konditionell Mehrere</strong> (Kann-Beziehung / [0,N])</span>
+        </div>
+    </div>
+
+    <!-- FACHLICHE BEGRÜNDUNG -->
+    <div class="info-section">
+        <h3>Erläuterung der gewählten C-Notation</h3>
+        <div class="info-grid">
+            <div class="info-card">
+                <h4>1</h4>
+                <p><strong>Sicherer Bezug</strong><br>Eine Box besitzt immer genau <strong>1</strong> Stall-Zuordnung. Futter hat immer exakt <strong>1</strong> Hersteller. Es darf hier keine verwaisten Daten geben.</p>
+            </div>
+            <div class="info-card">
+                <h4>c</h4>
+                <p><strong>Optionale Einzelwerte</strong><br>Ein Tier steht in maximal einer (<strong>c</strong>) Box (Weidetiere haben eventuell keine Boxenzuweisung). Neugeborene Jungtiere bevorzugen noch kein Kraftfutter (<strong>c</strong>).</p>
+            </div>
+            <div class="info-card">
+                <h4>mc</h4>
+                <p><strong>Vollflexible Listen</strong><br>Ein Stall kann noch unbesetzt sein oder gerade renoviert werden (<strong>mc</strong> Boxen). Ein Hersteller kann im System gepflegt werden, ohne dass wir aktuell Futter von ihm listen (<strong>mc</strong> Futter).</p>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
+
+							<script>
+                            	
+							</script>
+                        </body>
+                        </html>
+                    
