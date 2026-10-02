@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tonleitern am Klavier</title>
+<style>
+  :root {
+    --ink: #17212b;
+    --muted: #687782;
+    --paper: #f4efe7;
+    --panel: rgba(255, 252, 246, .86);
+    --line: #d9d0c4;
+    --coral: #ef6f5e;
+    --coral-dark: #b94d40;
+    --teal: #2a7774;
+    --gold: #e5ad55;
+    --shadow: 0 22px 60px rgba(62, 48, 32, .14);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(239,111,94,.18), transparent 27rem),
+      radial-gradient(circle at 92% 80%, rgba(42,119,116,.16), transparent 24rem),
+      linear-gradient(135deg, #f7f2ea 0%, #e8eee8 100%);
+  }
+  button, select { font: inherit; }
+  .page { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 52px; }
+  header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 28px; animation: rise .7s ease both; }
+  .eyebrow { margin: 0 0 10px; color: var(--coral-dark); font: 700 .75rem/1.2 "Trebuchet MS", sans-serif; letter-spacing: .16em; text-transform: uppercase; }
+  h1 { max-width: 650px; margin: 0; font-size: clamp(2.7rem, 8vw, 6.6rem); line-height: .88; letter-spacing: -.045em; font-weight: 700; }
+  .intro { max-width: 290px; margin: 0 0 5px; color: var(--muted); font: 1rem/1.5 "Trebuchet MS", sans-serif; }
+  .workspace { display: grid; grid-template-columns: 310px 1fr; gap: 22px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid rgba(150, 130, 110, .25); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
+  .controls { padding: 24px; animation: rise .7s .1s ease both; }
+  .controls h2 { margin: 0 0 20px; font-size: 1.35rem; }
+  .field { margin-bottom: 18px; }
+  label { display: block; margin-bottom: 7px; color: var(--muted); font: 700 .7rem/1.2 "Trebuchet MS", sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+  select { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: 12px 10px; color: var(--ink); background: #fffdf9; cursor: pointer; }
+  .scale-info { min-height: 108px; padding: 14px; border-left: 3px solid var(--gold); background: #f7f1e7; }
+  .scale-info strong { display: block; margin-bottom: 6px; font-size: 1.15rem; }
+  .scale-info p { margin: 0; color: var(--muted); font: .82rem/1.45 "Trebuchet MS", sans-serif; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
+  button { border: 1px solid transparent; border-radius: 3px; padding: 12px 10px; color: white; background: var(--coral); cursor: pointer; transition: transform .2s, background .2s; }
+  button:hover { transform: translateY(-2px); background: var(--coral-dark); }
+  button.secondary { color: var(--teal); border-color: var(--teal); background: transparent; }
+  button.secondary:hover { color: white; background: var(--teal); }
+  .status { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; color: var(--muted); font: .75rem/1.3 "Trebuchet MS", sans-serif; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #b6c0bb; }
+  .status-dot.active { background: var(--coral); box-shadow: 0 0 0 5px rgba(239,111,94,.15); }
+  .stage { min-width: 0; padding: 24px; overflow: hidden; animation: rise .7s .2s ease both; }
+  .stage-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .stage-top h2 { margin: 0; font-size: 1.35rem; }
+  .octave { color: var(--muted); font: .75rem "Trebuchet MS", sans-serif; }
+  .note-strip { min-height: 62px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 24px; overflow-x: auto; background: #eee7dc; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .note { flex: 0 0 auto; min-width: 42px; padding: 7px 8px; text-align: center; color: var(--muted); font: 700 .83rem "Trebuchet MS", sans-serif; }
+  .note.current { color: var(--coral-dark); background: #fffaf1; }
+  .note.root { color: white; background: var(--teal); }
+  .keyboard-wrap { overflow-x: auto; padding: 0 1px 10px; }
+  .keyboard { position: relative; display: flex; min-width: 690px; height: 280px; padding: 0 10px 10px; background: #302f2d; border-radius: 5px; box-shadow: inset 0 6px 0 rgba(255,255,255,.07), 0 14px 24px rgba(32, 26, 21, .22); }
+  .white-keys { display: flex; width: 100%; height: 100%; }
+  .key { user-select: none; cursor: pointer; }
+  .white { position: relative; flex: 1; min-width: 42px; height: 100%; border: 1px solid #cfc8bc; border-top: 0; border-radius: 0 0 5px 5px; background: linear-gradient(90deg, #fffdf8, #e9e5dd); box-shadow: inset -4px 0 0 rgba(90, 74, 57, .1); }
+  .white.active { background: linear-gradient(90deg, #f8a696, #e87464); }
+  .white.root-key { box-shadow: inset 0 -7px 0 var(--teal), inset -4px 0 0 rgba(90, 74, 57, .1); }
+  .black-keys { position: absolute; inset: 0 10px; pointer-events: none; }
+  .black { position: absolute; z-index: 2; top: 0; width: 34px; height: 61%; border: 1px solid #141414; border-radius: 0 0 4px 4px; background: linear-gradient(90deg, #404040, #0f1011 60%, #555); box-shadow: 0 5px 4px rgba(0,0,0,.35); pointer-events: auto; }
+  .black.active { background: linear-gradient(90deg, #f58b79, #b53f35); }
+  .key-label { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; color: #91887e; font: .68rem "Trebuchet MS", sans-serif; }
+  .white.active .key-label { color: #7d2f28; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; color: var(--muted); font: .73rem "Trebuchet MS", sans-serif; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 12px; height: 12px; display: inline-block; border-radius: 2px; background: var(--coral); }
+  .legend .root-swatch { background: var(--teal); }
+  .hint { margin: 22px 0 0; color: var(--muted); font: .8rem/1.45 "Trebuchet MS", sans-serif; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 800px) {
+    .page { width: min(100% - 20px, 680px); padding-top: 22px; }
+    header { display: block; }
+    .intro { max-width: 480px; margin-top: 16px; }
+    .workspace { grid-template-columns: 1fr; }
+    .controls { order: 1; }
+    .stage { order: 0; }
+  }
+  @media (max-width: 480px) {
+    h1 { font-size: 3.7rem; }
+    .stage, .controls { padding: 18px; }
+    .keyboard { height: 235px; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div>
+      <p class="eyebrow">Interaktives Tonlabor</p>
+      <h1>Tonleitern<br>am Klavier</h1>
+    </div>
+    <p class="intro">Wähle einen Grundton, erkunde die Skala auf der Klaviatur und lass sie dir vorspielen.</p>
+  </header>
+
+  <div class="workspace">
+    <aside class="panel controls">
+      <h2>Skala wählen</h2>
+      <div class="field">
+        <label for="root">Grundton</label>
+        <select id="root"></select>
+      </div>
+      <div class="field">
+        <label for="scale">Tonleiter</label>
+        <select id="scale"></select>
+      </div>
+      <div class="scale-info" aria-live="polite">
+        <strong id="scale-name">C-Dur</strong>
+        <p id="scale-description">Die helle, vertraute Dur-Tonleiter.</p>
+      </div>
+      <div class="actions">
+        <button id="play" type="button">▶ Abspielen</button>
+        <button id="stop" class="secondary" type="button">■ Stop</button>
+      </div>
+      <div class="status"><span id="status-dot" class="status-dot"></span><span id="status-text">Bereit zum Spielen</span></div>
+    </aside>
+
+    <section class="panel stage">
+      <div class="stage-top">
+        <h2 id="stage-title">C-Dur</h2>
+        <span class="octave">C3 bis C5 · 25 Tasten</span>
+      </div>
+      <div id="note-strip" class="note-strip" aria-label="Noten der ausgewählten Tonleiter"></div>
+      <div class="keyboard-wrap">
+        <div id="keyboard" class="keyboard" aria-label="Interaktive Klaviatur"></div>
+      </div>
+      <div class="legend"><span><i></i> Tonleiter-Ton</span><span><i class="root-swatch"></i> Grundton</span><span>Alle Tasten sind anklickbar</span></div>
+      <p class="hint">Tipp: Nutze auch die Tasten <strong>A W S E D F T G Y H U J K</strong> auf deiner Computertastatur.</p>
+    </section>
+  </div>
+</main>
+<script>
+  const noteNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+  const roots = [
+    ['C', 0], ['C♯', 1], ['D', 2], ['D♯', 3], ['E', 4], ['F', 5],
+    ['F♯', 6], ['G', 7], ['G♯', 8], ['A', 9], ['A♯', 10], ['B', 11]
+  ];
+  const scales = {
+    major: ['Dur', [0, 2, 4, 5, 7, 9, 11], 'Die helle, vertraute Dur-Tonleiter.'],
+    naturalMinor: ['Natürlich Moll', [0, 2, 3, 5, 7, 8, 10], 'Die natürliche Molltonleiter mit melancholischem Charakter.'],
+    harmonicMinor: ['Harmonisch Moll', [0, 2, 3, 5, 7, 8, 11], 'Moll mit erhöhter siebter Stufe und spannender Farbe.'],
+    melodicMinor: ['Melodisch Moll', [0, 2, 3, 5, 7, 9, 11], 'Aufwärts mit großer Sext und großer Septime.'],
+    dorian: ['Dorisch', [0, 2, 3, 5, 7, 9, 10], 'Mollklang mit heller, erhöhter sechster Stufe.'],
+    phrygian: ['Phrygisch', [0, 1, 3, 5, 7, 8, 10], 'Dunkler Modus mit charakteristischer kleiner Sekunde.'],
+    lydian: ['Lydisch', [0, 2, 4, 6, 7, 9, 11], 'Schwebender Durklang mit erhöhter Quarte.'],
+    mixolydian: ['Mixolydisch', [0, 2, 4, 5, 7, 9, 10], 'Bluesiger Durmodus mit kleiner Septime.'],
+    locrian: ['Lokrisch', [0, 1, 3, 5, 6, 8, 10], 'Der spannungsreiche Modus mit verminderter Quinte.'],
+    majorPentatonic: ['Dur-Pentatonik', [0, 2, 4, 7, 9], 'Fünf klare Töne, ideal für Melodien und Improvisation.'],
+    minorPentatonic: ['Moll-Pentatonik', [0, 3, 5, 7, 10], 'Die klassische Basis für Blues, Rock und Pop.'],
+    blues: ['Blues-Tonleiter', [0, 3, 5, 6, 7, 10], 'Moll-Pentatonik mit zusätzlicher Blue Note.'],
+    wholeTone: ['Ganztonleiter', [0, 2, 4, 6, 8, 10], 'Sechs gleichmäßig verteilte Töne mit schwebender Wirkung.'],
+    chromatic: ['Chromatische Tonleiter', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'Alle zwölf Halbtöne: die vollständige Klangpalette.'],
+    diminished: ['Verminderte Skala', [0, 2, 3, 5, 6, 8, 9, 11], 'Das symmetrische Wechselspiel aus Ganz- und Halbtonschritten.'],
+    japanese: ['Japanische Pentatonik', [0, 1, 5, 7, 8], 'Eine offene, klare Fünftonleiter mit ostasiatischer Färbung.']
+  };
+  const rootSelect = document.querySelector('#root');
+  const scaleSelect = document.querySelector('#scale');
+  const keyboard = document.querySelector('#keyboard');
+  const noteStrip = document.querySelector('#note-strip');
+  const audio = { context: null, timers: [], active: false };
+  let currentNotes = [];
+  let keys = [];
+
+  roots.forEach(([name]) => rootSelect.add(new Option(name, name)));
+  Object.entries(scales).forEach(([value, [name]]) => scaleSelect.add(new Option(name, value)));
+  rootSelect.value = 'C';
+  scaleSelect.value = 'major';
+
+  function midiName(midi) { return noteNames[midi % 12] + (Math.floor(midi / 12) - 1); }
+  function frequency(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  function makeScale() {
+    const root = roots.find(item => item[0] === rootSelect.value)[1];
+    const definition = scales[scaleSelect.value];
+    currentNotes = definition[1].map(interval => root + interval);
+    document.querySelector('#scale-name').textContent = rootSelect.value + '-' + definition[0];
+    document.querySelector('#stage-title').textContent = rootSelect.value + '-' + definition[0];
+    document.querySelector('#scale-description').textContent = definition[2];
+    noteStrip.innerHTML = currentNotes.map((note, index) => `<span class="note ${index === 0 ? 'root' : ''}">${noteNames[note % 12]}</span>`).join('');
+    paintKeys();
+  }
+
+  function buildKeyboard() {
+    const whiteNotes = [0, 2, 4, 5, 7, 9, 11];
+    const whiteKeys = document.createElement('div');
+    whiteKeys.className = 'white-keys';
+    const blackKeys = document.createElement('div');
+    blackKeys.className = 'black-keys';
+    for (let midi = 48; midi <= 72; midi++) {
+      const pitch = midi % 12;
+      const isWhite = whiteNotes.includes(pitch);
+      const key = document.createElement('div');
+      key.className = 'key ' + (isWhite ? 'white' : 'black');
+      key.dataset.midi = midi;
+      key.setAttribute('role', 'button');
+      key.setAttribute('aria-label', midiName(midi));
+      key.innerHTML = isWhite ? `<span class="key-label">${midiName(midi)}</span>` : '';
+      key.addEventListener('pointerdown', () => playNote(midi, .55));
+      (isWhite ? whiteKeys : blackKeys).appendChild(key);
+    }
+    keyboard.append(whiteKeys, blackKeys);
+    keys = [...keyboard.querySelectorAll('.key')];
+    positionBlackKeys();
+  }
+
+  function positionBlackKeys() {
+    const whiteWidth = keyboard.querySelector('.white').getBoundingClientRect().width;
+    let whiteIndex = 0;
+    keys.filter(key => key.classList.contains('white')).forEach(() => whiteIndex++);
+    const blackPositions = [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14, 15, 17, 18, 19, 21, 22];
+    keys.filter(key => key.classList.contains('black')).forEach((key, index) => {
+      key.style.left = `${(blackPositions[index] + .68) * whiteWidth - 17}px`;
+    });
+  }
+
+  function paintKeys() {
+    keys.forEach(key => {
+      const midi = Number(key.dataset.midi);
+      const pitch = midi % 12;
+      const root = currentNotes[0] % 12;
+      key.classList.toggle('active', currentNotes.some(note => note % 12 === pitch));
+      key.classList.toggle('root-key', pitch === root);
+    });
+  }
+
+  function getAudio() {
+    if (!audio.context) audio.context = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.context.state === 'suspended') audio.context.resume();
+    return audio.context;
+  }
+
+  function playNote(midi, duration = .45) {
+    const context = getAudio();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.value = frequency(midi);
+    gain.gain.setValueAtTime(.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.18, context.currentTime + .025);
+    gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + duration);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + duration + .03);
+    const key = keys.find(item => Number(item.dataset.midi) === midi);
+    if (key) { key.classList.add('active'); setTimeout(() => paintKeys(), duration * 1000); }
+  }
+
+  function stopPlayback() {
+    audio.timers.forEach(timer => clearTimeout(timer));
+    audio.timers = [];
+    audio.active = false;
+    document.querySelector('#status-dot').classList.remove('active');
+    document.querySelector('#status-text').textContent = 'Bereit zum Spielen';
+    paintKeys();
+  }
+
+  function playScale() {
+    stopPlayback();
+    const sequence = [...currentNotes, currentNotes[0] + 12, ...currentNotes.slice().reverse()];
+    audio.active = true;
+    document.querySelector('#status-dot').classList.add('active');
+    document.querySelector('#status-text').textContent = 'Skala wird gespielt …';
+    sequence.forEach((note, index) => {
+      audio.timers.push(setTimeout(() => {
+        playNote(48 + note, .42);
+        if (index === sequence.length - 1) {
+          audio.active = false;
+          document.querySelector('#status-dot').classList.remove('active');
+          document.querySelector('#status-text').textContent = 'Skala beendet';
+        }
+      }, index * 330));
+    });
+  }
+
+  const keyMap = {'a': 48, 'w': 49, 's': 50, 'e': 51, 'd': 52, 'f': 53, 't': 54, 'g': 55, 'y': 56, 'h': 57, 'u': 58, 'j': 59, 'k': 60};
+  document.addEventListener('keydown', event => { if (keyMap[event.key.toLowerCase()] !== undefined) playNote(keyMap[event.key.toLowerCase()]); });
+  rootSelect.addEventListener('change', makeScale);
+  scaleSelect.addEventListener('change', makeScale);
+  document.querySelector('#play').addEventListener('click', playScale);
+  document.querySelector('#stop').addEventListener('click', stopPlayback);
+  window.addEventListener('resize', positionBlackKeys);
+  buildKeyboard();
+  makeScale();
+</script>
+</body>
+</html>
