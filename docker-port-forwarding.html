@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docker Port-Weiterleitung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a network diagram on top, editable port mappings and a packet sender below, generated commands last. */
+:root{
+  --bg:#f4f6f8; --panel:#ffffff; --soft:#e9eef3; --ink:#14202b; --muted:#5b6b7a; --line:#cfd8e1;
+  --accent:#0a5fd0; --port:#b45309; --ok:#14804a; --bad:#c62828;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e151c; --panel:#16202a; --soft:#1d2a36; --ink:#e6edf3; --muted:#93a4b4; --line:#2b3a48;
+    --accent:#5aa2ff; --port:#f0a24b; --ok:#4cc38a; --bad:#ff7b72; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e151c; --panel:#16202a; --soft:#1d2a36; --ink:#e6edf3; --muted:#93a4b4; --line:#2b3a48;
+  --accent:#5aa2ff; --port:#f0a24b; --ok:#4cc38a; --bad:#ff7b72; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 56px;display:flex;flex-direction:column;gap:20px}
+h1{font-size:26px;line-height:1.2;margin:0;font-weight:600;text-wrap:balance}
+h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--muted);font-weight:600}
+p{margin:0}
+.lede{color:var(--muted);max-width:68ch;margin-top:6px}
+.syntax{display:flex;flex-wrap:wrap;align-items:flex-end;gap:0;font:500 15px var(--mono);margin-top:14px}
+.syntax .seg{display:flex;flex-direction:column;align-items:center;gap:4px}
+.syntax .seg b{font-weight:500;padding:3px 6px;border-bottom:2px solid var(--c)}
+.syntax .seg i{font:400 11px var(--sans);color:var(--muted);font-style:normal}
+.syntax .sep{padding:3px 1px;color:var(--muted);align-self:flex-start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.diagram{padding:0;overflow-x:auto}
+.diagram svg{display:block;width:100%;min-width:760px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;background:var(--c);vertical-align:-1px}
+.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:12px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+button{font:500 13px var(--sans);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer}
+button:hover{background:var(--soft)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary:hover{filter:brightness(1.08)}
+button.ghost{border-color:transparent;color:var(--muted);padding:4px 8px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input,select{font:400 13px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+input[type=number]{width:84px}
+.cc{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.cc-top{display:flex;gap:8px;align-items:center}
+.cc-top .name{font-weight:600;width:110px}
+.cc-top .img{flex:1}
+.field{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.field input{flex:1}
+.maps{display:flex;flex-direction:column;gap:6px}
+.mrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mrow .arrow{color:var(--muted);font-family:var(--mono)}
+.mrow .msg{flex-basis:100%;font-size:12px;color:var(--bad);margin:0}
+.mrow .msg:empty{display:none}
+.nomap{font-size:13px;color:var(--muted)}
+.sender{padding:14px;display:flex;flex-direction:column;gap:12px}
+.sender .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sender label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.sender select,.sender input{width:100%}
+.sender .row3{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font-size:12px;padding:4px 9px}
+.result{border:1px solid var(--line);border-left-width:4px;border-radius:6px;padding:10px 12px;background:var(--bg)}
+.result.ok{border-left-color:var(--ok)}
+.result.bad{border-left-color:var(--bad)}
+.result strong{display:block;font-size:14px}
+.result .d{color:var(--muted);font-size:13px;margin-top:2px}
+.result.idle{border-left-color:var(--line);color:var(--muted);font-size:13px}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font:12px var(--mono);color:var(--muted)}
+.log li{display:flex;gap:8px}
+.log .ok{color:var(--ok)} .log .bad{color:var(--bad)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.out{padding:14px}
+pre{margin:0;font:12.5px/1.6 var(--mono);overflow-x:auto;white-space:pre;color:var(--ink)}
+.note{font-size:13px;color:var(--muted)}
+/* diagram */
+svg text{font-family:var(--mono);fill:var(--ink)}
+svg .mut{fill:var(--muted)}
+svg .ttl{font-family:var(--sans);font-weight:600;font-size:13px}
+svg .sm{font-size:10.5px}
+svg .md{font-size:11.5px}
+svg .box{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+svg .hostbox{fill:var(--soft);stroke:var(--line);stroke-width:1.2;stroke-dasharray:5 4}
+svg .node.hit .box{stroke:var(--accent);stroke-width:2}
+svg .node.ok .box{stroke:var(--ok);stroke-width:2.5}
+svg .node.fail .box{stroke:var(--bad);stroke-width:2.5}
+svg .edge{stroke:var(--line);stroke-width:1.5;fill:none}
+svg .edge.pub{stroke:var(--port);stroke-opacity:.55}
+svg .trail{stroke:var(--accent);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+svg .trail.bad{stroke:var(--bad)}
+svg .trail.ok{stroke:var(--ok)}
+svg .dot{fill:var(--accent)}
+svg .pdot{fill:var(--port)}
+svg .bad{fill:var(--bad)}
+svg .strike{text-decoration:line-through;fill:var(--bad)}
+svg .xmark{stroke:var(--bad);stroke-width:3;stroke-linecap:round}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Docker Port-Weiterleitung</h1>
+    <p class="lede">Ein veröffentlichter Port verbindet eine Adresse des Hosts mit einem Port im Container. Ändere die Zuordnungen, sende ein Paket und beobachte, wohin es gelangt oder wo es gestoppt wird.</p>
+    <div class="syntax" aria-label="Aufbau des -p-Flags">
+      <div class="seg" style="--c:var(--muted)"><b>-p</b><i>veröffentlichen</i></div>
+      <span class="sep"></span>
+      <div class="seg" style="--c:var(--accent)"><b>127.0.0.1</b><i>Host-IP (optional)</i></div><span class="sep">:</span>
+      <div class="seg" style="--c:var(--port)"><b>8443</b><i>Host-Port</i></div><span class="sep">:</span>
+      <div class="seg" style="--c:var(--ok)"><b>443</b><i>Container-Port</i></div><span class="sep">/</span>
+      <div class="seg" style="--c:var(--muted)"><b>tcp</b><i>Protokoll</i></div>
+    </div>
+  </header>
+
+  <section class="card diagram" aria-label="Netzwerkdiagramm">
+    <svg id="svg" viewBox="0 0 986 380" role="img" aria-label="Diagramm von Clients, Docker-Host und Containern"></svg>
+    <div class="legend">
+      <span style="--c:var(--port)">Veröffentlichter Port</span>
+      <span style="--c:var(--accent)">Paketweg</span>
+      <span style="--c:var(--ok)">Zugestellt</span>
+      <span style="--c:var(--bad)">Gestoppt</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="stack" aria-label="Container und Port-Zuordnungen">
+      <div class="head">
+        <h2>Container und Zuordnungen</h2>
+        <div><button id="addC" type="button">Container hinzufügen</button> <button id="reset" type="button" class="ghost">Zurücksetzen</button></div>
+      </div>
+      <div id="editor" class="stack"></div>
+    </section>
+
+    <section class="stack" aria-label="Paketsender">
+      <h2>Paket senden</h2>
+      <div class="card sender">
+        <div class="presets" id="presets"></div>
+        <div class="row">
+          <label for="src">Von
+            <select id="src"></select>
+          </label>
+          <label for="dst">Zieladresse
+            <select id="dst"></select>
+          </label>
+        </div>
+        <div class="row3">
+          <label for="port">Port
+            <input id="port" type="number" min="1" max="65535" value="8080">
+          </label>
+          <label for="proto">Protokoll
+            <select id="proto"><option>tcp</option><option>udp</option></select>
+          </label>
+          <button id="send" class="primary" type="button">Senden</button>
+        </div>
+        <div id="result" class="result idle" aria-live="polite">Quelle und Ziel wählen, dann Senden drücken.</div>
+        <ul id="log" class="log" aria-label="Letzte Pakete"></ul>
+      </div>
+    </section>
+  </div>
+
+  <section class="stack" aria-label="Erzeugte Konfiguration">
+    <div class="head">
+      <h2>Was das auf der Kommandozeile bedeutet</h2>
+      <div class="tabs" id="tabs" role="group" aria-label="Ausgabeformat">
+        <button type="button" data-t="run" aria-pressed="true">docker run</button>
+        <button type="button" data-t="compose" aria-pressed="false">compose.yaml</button>
+        <button type="button" data-t="ps" aria-pressed="false">docker ps</button>
+        <button type="button" data-t="ipt" aria-pressed="false">iptables</button>
+        <button type="button" id="copy">Kopieren</button>
+      </div>
+    </div>
+    <div class="card out"><pre id="out"></pre></div>
+    <p class="note">Verkehr von außerhalb des Hosts wird durch eine DNAT-Regel in der nat-Tabelle umgeschrieben. Verbindungen vom Host zu 127.0.0.1 sowie von Containern zur Host-Adresse laufen über docker-proxy. Verkehr zwischen Containern auf der Standard-Bridge braucht gar keinen veröffentlichten Port.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  var HOST_IP="192.168.1.20", LAN_IP="192.168.1.50", GW="172.17.0.1";
+  var IPS=["0.0.0.0","127.0.0.1",HOST_IP];
+  var nextC=1, nextM=1;
+  var $=function(s){return document.querySelector(s)};
+  var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})};
+  var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function mk(name,image,listen,maps){
+    return {id:nextC++,name:name,image:image,listenStr:listen,maps:maps.map(function(m){
+      return {id:nextM++,ip:m[0],hp:m[1]===null?"":String(m[1]),cp:String(m[2]),proto:m[3]||"tcp"};
+    })};
+  }
+  function defaults(){
+    nextC=1;nextM=1;
+    return [
+      mk("web","nginx:alpine","80, 443",[["0.0.0.0",8080,80],["127.0.0.1",8443,443]]),
+      mk("api","node:22","3000",[["0.0.0.0",3000,3000]]),
+      mk("db","postgres:17","5432",[["127.0.0.1",5432,5432]]),
+      mk("redis","redis:7","6379",[])
+    ];
+  }
+  var state={cs:defaults(),sim:null,tab:"run",anim:0};
+  var log=[];
+
+  function cname(c){return (c.name||"").trim().toLowerCase().replace(/[^a-z0-9_.-]/g,"-")||"container"}
+  function parseListen(str){
+    var out=[];
+    String(str).split(/[,\s]+/).forEach(function(t){
+      var m=/^(\d+)(?:\/(tcp|udp))?$/i.exec(t);
+      if(m&&+m[1]>=1&&+m[1]<=65535)out.push({p:+m[1],proto:(m[2]||"tcp").toLowerCase()});
+    });
+    return out;
+  }
+  function byId(id){return state.cs.filter(function(c){return c.id===+id})[0]}
+
+  /* Resolve every mapping: assign IPs, random host ports, detect conflicts. */
+  function derive(){
+    var eph=32768, flat=[];
+    state.cs.forEach(function(c,i){
+      c.ip="172.17.0."+(i+2);
+      c.listens=parseListen(c.listenStr);
+      c.maps.forEach(function(m){
+        var rnd=(m.hp===""||m.hp==null);
+        flat.push({m:m,c:c,ip:m.ip,hp:rnd?eph++:+m.hp,random:rnd,cp:+m.cp,proto:m.proto,err:"",active:true});
+      });
+    });
+    flat.forEach(function(r,i){
+      var bad=function(p){return !(p>=1&&p<=65535)};
+      if(bad(r.hp)||bad(r.cp)){r.err="Ports müssen zwischen 1 und 65535 liegen.";r.active=false;return;}
+      for(var j=0;j<i;j++){
+        var o=flat[j];
+        if(o.active&&o.hp===r.hp&&o.proto===r.proto&&(o.ip==="0.0.0.0"||r.ip==="0.0.0.0"||o.ip===r.ip)){
+          r.err="Port "+r.hp+"/"+r.proto+" ist bereits von "+cname(o.c)+" belegt. Docker startet diesen Container nicht.";
+          r.active=false;break;
+        }
+      }
+    });
+    state.flat=flat;
+  }
+
+  /* ---------- packet simulation ---------- */
+  function simulate(src,dst,port,proto){
+    var flat=state.flat, P=[src], isC=src.indexOf("c:")===0;
+    function fin(ok,title,detail,failAt,hit){return {ok:ok,title:title,detail:detail,path:P.slice(),failAt:failAt||null,hit:hit||null}}
+    function listens(c,p){return c.listens.some(function(l){return l.p===p&&l.proto===proto})}
+
+    if(dst.indexOf("c:")===0){
+      var t=byId(dst.slice(2));
+      if(src==="lan"){
+        P.push("nic");
+        return fin(false,"Keine Route zu "+t.ip,"docker0 ist ein privates Netz im Host. Ein LAN-Rechner kann es nicht direkt ansprechen. Veröffentliche einen Port, um den Container zu erreichen.","nic");
+      }
+      if(src===dst){
+        return listens(t,port)?fin(true,"Verbunden mit "+cname(t)+":"+port,"Gleicher Container, das Paket verlässt ihn nie.",null)
+          :fin(false,"Verbindung abgelehnt","In "+cname(t)+" lauscht nichts auf "+port+"/"+proto+".","c:"+t.id);
+      }
+      P.push("br","c:"+t.id);
+      return listens(t,port)
+        ? fin(true,"Verbunden mit "+cname(t)+" unter "+t.ip+":"+port,"Direkter Sprung über docker0. Kein veröffentlichter Port nötig, weil der Verkehr die Bridge nie verlässt.",null)
+        : fin(false,"Verbindung abgelehnt","Das Paket hat "+cname(t)+" erreicht, aber dort lauscht nichts auf "+port+"/"+proto+".","c:"+t.id);
+    }
+
+    var addr=dst==="lo"?"127.0.0.1":HOST_IP;
+    if(isC&&dst==="lo"){
+      var me=byId(src.slice(2));
+      return listens(me,port)?fin(true,"Mit sich selbst verbunden","127.0.0.1 im Container ist der Container selbst, nicht der Host.",null)
+        :fin(false,"Verbindung abgelehnt","127.0.0.1 im Container ist der Container selbst, nicht der Host. Nutze die Host-Adresse oder die IP des anderen Containers.",src);
+    }
+    if(isC)P.push("br");
+    P.push("nic");
+    var cands=flat.filter(function(r){return r.active&&r.hp===port&&r.proto===proto});
+    var hit=cands.filter(function(r){return r.ip==="0.0.0.0"||r.ip===addr})[0];
+    if(!hit){
+      var other=cands[0];
+      return fin(false,"Verbindung abgelehnt",other
+        ? "Port "+port+" ist nur auf "+other.ip+" veröffentlicht, daher hat "+addr+" keinen Listener."
+        : "Auf dem Host lauscht nichts auf "+port+"/"+proto+". Veröffentliche ihn mit -p.","nic");
+    }
+    var tc=hit.c;
+    if(isC){P.push("br","c:"+tc.id);}
+    else P.push("nat","br","c:"+tc.id);
+    if(!listens(tc,hit.cp)){
+      return fin(false,"Verbindung abgelehnt","Die Zuordnung leitete das Paket an "+tc.ip+":"+hit.cp+" weiter, aber in "+cname(tc)+" lauscht nichts auf "+hit.cp+"/"+proto+".","c:"+tc.id,hit);
+    }
+    var how=isC?"docker-proxy leitete es von der Host-Adresse weiter. DNAT überspringt Pakete, die von docker0 kommen."
+      :(dst==="lo"?"docker-proxy nahm die Loopback-Verbindung auf und leitete sie weiter.":"Eine DNAT-Regel schrieb das Ziel vor dem Routing um.");
+    return fin(true,addr+":"+port+" → "+tc.ip+":"+hit.cp,how,null,hit);
+  }
+
+  /* ---------- diagram ---------- */
+  var pos={},H=380;
+  function layout(){
+    pos={};var y=12,gap=14;
+    state.cs.forEach(function(c){
+      var n=Math.max(c.maps.length,1), h=72+n*20;
+      pos["c:"+c.id]={x:770,y:y,w:200,h:h};y+=h+gap;
+    });
+    H=Math.max(y,380);var mid=H/2;
+    pos.lan={x:16,y:mid-100,w:150,h:62};
+    pos.host={x:16,y:mid+38,w:150,h:62};
+    pos.nic={x:232,y:mid-42,w:130,h:84};
+    pos.nat={x:392,y:mid-42,w:130,h:84};
+    pos.br={x:552,y:mid-42,w:116,h:84};
+    Object.keys(pos).forEach(function(k){var p=pos[k];p.cx=p.x+p.w/2;p.cy=p.y+p.h/2});
+  }
+  function cls(key){
+    var s=state.sim;if(!s||!s.done)return "";
+    var r=s.res,c=[];
+    if(r.path.indexOf(key)>-1)c.push("hit");
+    if(r.failAt===key)c.push("fail");
+    if(r.ok&&r.path[r.path.length-1]===key)c.push("ok");
+    return c.join(" ");
+  }
+  function node(key,title,lines){
+    var p=pos[key];
+    var t='<g class="node '+cls(key)+'"><rect class="box" x="'+p.x+'" y="'+p.y+'" width="'+p.w+'" height="'+p.h+'" rx="8"/>';
+    t+='<text class="ttl" x="'+(p.x+12)+'" y="'+(p.y+22)+'">'+esc(title)+'</text>';
+    lines.forEach(function(l,i){t+='<text class="mut md" x="'+(p.x+12)+'" y="'+(p.y+41+i*16)+'">'+esc(l)+'</text>'});
+    return t+'</g>';
+  }
+  function trim(s,n){return s.length>n?s.slice(0,n-1)+"…":s}
+  function renderDiagram(){
+    layout();
+    var svg=$("#svg");svg.setAttribute("viewBox","0 0 986 "+H);
+    var h='';
+    h+='<rect class="hostbox" x="204" y="8" width="480" height="'+(H-16)+'" rx="12"/>';
+    h+='<text class="ttl mut" x="220" y="30">Docker-Host</text>';
+    // base edges
+    var line=function(a,b,c){return '<path class="edge '+(c||"")+'" d="M'+pos[a].cx+' '+pos[a].cy+' L'+pos[b].cx+' '+pos[b].cy+'"/>'};
+    h+=line("lan","nic")+line("host","nic")+line("nic","nat")+line("nat","br");
+    var pubIds={};state.flat.forEach(function(r){if(r.active)pubIds[r.c.id]=1});
+    state.cs.forEach(function(c){
+      var k="c:"+c.id,p=pos[k],b=pos.br;
+      h+='<path class="edge '+(pubIds[c.id]?"pub":"")+'" d="M'+(b.x+b.w)+' '+b.cy+' C'+(b.x+b.w+50)+' '+b.cy+' '+(p.x-50)+' '+p.cy+' '+p.x+' '+p.cy+'"/>';
+    });
+    h+=node("lan","LAN-Laptop",[LAN_IP,"anderer Rechner"]);
+    h+=node("host","Host-Shell",["curl localhost","auf dem Host selbst"]);
+    h+=node("nic","Host-Netz",["eth0 "+HOST_IP,"lo  127.0.0.1"]);
+    h+=node("nat","nat-Tabelle",["DNAT-Regeln","docker-proxy"]);
+    h+=node("br","docker0",[GW,"172.17.0.0/16"]);
+    state.cs.forEach(function(c){
+      var k="c:"+c.id,p=pos[k];
+      var t='<g class="node '+cls(k)+'"><rect class="box" x="'+p.x+'" y="'+p.y+'" width="'+p.w+'" height="'+p.h+'" rx="8"/>';
+      t+='<text class="ttl" x="'+(p.x+12)+'" y="'+(p.y+22)+'">'+esc(cname(c))+'</text>';
+      t+='<text class="mut sm" x="'+(p.x+12)+'" y="'+(p.y+38)+'">'+esc(trim(c.image,16))+' · '+c.ip+'</text>';
+      t+='<text class="mut sm" x="'+(p.x+12)+'" y="'+(p.y+53)+'">lauscht auf '+esc(trim(c.listens.map(function(l){return l.p+(l.proto==="udp"?"/udp":"")}).join(", ")||"nichts",22))+'</text>';
+      var rows=state.flat.filter(function(r){return r.c===c});
+      if(!rows.length)t+='<text class="mut sm" x="'+(p.x+12)+'" y="'+(p.y+78)+'">keine veröffentlichten Ports</text>';
+      rows.forEach(function(r,i){
+        var y=p.y+78+i*20;
+        var label=(r.ip==="0.0.0.0"?"":r.ip+":")+r.hp+" → "+(r.cp||"?")+"/"+r.proto;
+        t+='<circle cx="'+(p.x+16)+'" cy="'+(y-4)+'" r="3.5" fill="'+(r.active?"var(--port)":"var(--bad)")+'"/>';
+        t+='<text class="md '+(r.active?"":"strike")+'" x="'+(p.x+26)+'" y="'+y+'">'+esc(label)+'</text>';
+      });
+      h+=t+'</g>';
+    });
+    // trail
+    var s=state.sim;
+    if(s&&s.done){
+      var pts=s.res.path.map(function(k){return pos[k].cx+","+pos[k].cy}).join(" ");
+      h+='<polyline class="trail '+(s.res.ok?"ok":"bad")+'" points="'+pts+'"/>';
+      if(s.res.failAt&&pos[s.res.failAt]){
+        var f=pos[s.res.failAt],fx=f.x+f.w-18,fy=f.y+16;
+        h+='<g class="xmark"><line x1="'+(fx-6)+'" y1="'+(fy-6)+'" x2="'+(fx+6)+'" y2="'+(fy+6)+'"/><line x1="'+(fx+6)+'" y1="'+(fy-6)+'" x2="'+(fx-6)+'" y2="'+(fy+6)+'"/></g>';
+      }
+    }
+    h+='<circle id="pkt" class="dot" r="7" cx="-20" cy="-20"/>';
+    svg.innerHTML=h;
+  }
+
+  function animate(res,cb){
+    var token=++state.anim;
+    if(reduce||res.path.length<2){cb();return}
+    var pts=res.path.map(function(k){return [pos[k].cx,pos[k].cy]});
+    var segs=[],total=0;
+    for(var i=1;i<pts.length;i++){var d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);segs.push(d);total+=d}
+    var dur=Math.max(700,total*2.2),t0=performance.now();
+    var dot=$("#pkt");
+    function step(now){
+      if(token!==state.anim)return;
+      var t=Math.min(1,(now-t0)/dur),dist=t*total,i=0;
+      while(i<segs.length-1&&dist>segs[i]){dist-=segs[i];i++}
+      var f=segs[i]?Math.min(1,dist/segs[i]):1;
+      dot.setAttribute("cx",pts[i][0]+(pts[i+1][0]-pts[i][0])*f);
+      dot.setAttribute("cy",pts[i][1]+(pts[i+1][1]-pts[i][1])*f);
+      if(t<1)requestAnimationFrame(step);else cb();
+    }
+    requestAnimationFrame(step);
+  }
+
+  /* ---------- editor ---------- */
+  function opt(v,label,sel){return '<option value="'+esc(v)+'"'+(sel?" selected":"")+'>'+esc(label||v)+'</option>'}
+  function mapRow(c,m){
+    return '<div class="mrow" data-m="'+m.id+'">'+
+      '<select class="ip" id="m'+m.id+'-ip" aria-label="Host-IP">'+IPS.map(function(ip){return opt(ip,ip,ip===m.ip)}).join("")+'</select>'+
+      '<input class="hp" id="m'+m.id+'-hp" type="number" min="1" max="65535" placeholder="zufällig" value="'+esc(m.hp)+'" aria-label="Host-Port">'+
+      '<span class="arrow">→</span>'+
+      '<input class="cp" id="m'+m.id+'-cp" type="number" min="1" max="65535" value="'+esc(m.cp)+'" aria-label="Container-Port">'+
+      '<select class="proto" id="m'+m.id+'-proto" aria-label="Protokoll">'+opt("tcp","tcp",m.proto==="tcp")+opt("udp","udp",m.proto==="udp")+'</select>'+
+      '<button type="button" class="ghost rmm" aria-label="Zuordnung entfernen">Entfernen</button>'+
+      '<p class="msg" data-msg="'+m.id+'"></p></div>';
+  }
+  function renderEditor(){
+    $("#editor").innerHTML=state.cs.map(function(c){
+      return '<div class="card cc" data-c="'+c.id+'">'+
+        '<div class="cc-top"><input class="name" id="c'+c.id+'-name" value="'+esc(c.name)+'" aria-label="Containername">'+
+        '<input class="img" id="c'+c.id+'-img" value="'+esc(c.image)+'" aria-label="Image">'+
+        '<button type="button" class="ghost rmc" aria-label="Container entfernen">Entfernen</button></div>'+
+        '<label class="field" for="c'+c.id+'-listen">Lauscht auf<input class="listen" id="c'+c.id+'-listen" value="'+esc(c.listenStr)+'" placeholder="80, 443, 53/udp"></label>'+
+        '<div class="maps">'+(c.maps.length?c.maps.map(function(m){return mapRow(c,m)}).join(""):'<p class="nomap">Keine veröffentlichten Ports. Nur andere Container an docker0 können ihn erreichen.</p>')+'</div>'+
+        '<div><button type="button" class="addm">Port-Zuordnung hinzufügen</button></div></div>';
+    }).join("");
+  }
+  function updateMsgs(){
+    document.querySelectorAll("[data-msg]").forEach(function(el){el.textContent=""});
+    state.flat.forEach(function(r){var el=document.querySelector('[data-msg="'+r.m.id+'"]');if(el)el.textContent=r.err});
+  }
+
+  /* ---------- sender selects ---------- */
+  function buildSelects(){
+    var sv=$("#src").value||"lan", dv=$("#dst").value||"hostip";
+    var srcOpts=[["lan","LAN-Laptop ("+LAN_IP+")"],["host","Shell auf dem Host"]].concat(state.cs.map(function(c){return ["c:"+c.id,"Im Container "+cname(c)]}));
+    $("#src").innerHTML=srcOpts.map(function(o){return opt(o[0],o[1],o[0]===sv)}).join("");
+    if(!srcOpts.some(function(o){return o[0]===sv}))$("#src").value="lan";
+    fillDst(dv);
+  }
+  function fillDst(want){
+    var src=$("#src").value;
+    var o=[["hostip","Host "+HOST_IP]];
+    if(src!=="lan")o.push(["lo","Loopback 127.0.0.1"]);
+    state.cs.forEach(function(c){o.push(["c:"+c.id,cname(c)+" "+c.ip])});
+    $("#dst").innerHTML=o.map(function(x){return opt(x[0],x[1],x[0]===want)}).join("");
+    if(!o.some(function(x){return x[0]===want}))$("#dst").value="hostip";
+  }
+  function buildPresets(){
+    var P=[
+      ["LAN an :8080","lan","hostip",8080],
+      ["LAN an :5432","lan","hostip",5432],
+      ["Host an localhost:5432","host","lo",5432],
+      ["api an db direkt","api","db",5432],
+      ["LAN an :3000","lan","hostip",3000]
+    ];
+    $("#presets").innerHTML=P.map(function(p,i){return '<button type="button" data-p="'+i+'">'+esc(p[0])+'</button>'}).join("");
+    $("#presets").onclick=function(e){
+      var b=e.target.closest("button");if(!b)return;
+      var p=P[+b.dataset.p];
+      var find=function(n){return state.cs.filter(function(c){return cname(c)===n})[0]};
+      var s=p[1],d=p[2];
+      if(s!=="lan"&&s!=="host"){var c=find(s);if(!c)return;s="c:"+c.id}
+      if(d!=="hostip"&&d!=="lo"){var c2=find(d);if(!c2)return;d="c:"+c2.id}
+      $("#src").value=s;fillDst(d);$("#dst").value=d;$("#port").value=p[3];$("#proto").value="tcp";
+      send();
+    };
+  }
+  function send(){
+    var port=+$("#port").value, proto=$("#proto").value;
+    var r=$("#result");
+    if(!(port>=1&&port<=65535)){r.className="result bad";r.innerHTML="<strong>Ungültiger Port</strong><div class='d'>Gib einen Port zwischen 1 und 65535 ein.</div>";return}
+    derive();
+    var res=simulate($("#src").value,$("#dst").value,port,proto);
+    state.sim={res:res,done:false};
+    renderDiagram();
+    r.className="result idle";r.textContent="Sende…";
+    animate(res,function(){
+      if(!state.sim||state.sim.res!==res)return;
+      state.sim.done=true;renderDiagram();
+      r.className="result "+(res.ok?"ok":"bad");
+      r.innerHTML="<strong>"+esc(res.title)+"</strong><div class='d'>"+esc(res.detail)+"</div>";
+      var srcLbl=$("#src").selectedOptions[0].textContent, dstLbl=$("#dst").selectedOptions[0].textContent;
+      log.unshift({ok:res.ok,t:srcLbl+" → "+dstLbl+":"+port+"/"+proto});
+      log=log.slice(0,6);renderLog();
+    });
+  }
+  function renderLog(){
+    $("#log").innerHTML=log.map(function(l){return '<li><span class="'+(l.ok?"ok":"bad")+'">'+(l.ok?"ok  ":"fehl")+'</span><span>'+esc(l.t)+'</span></li>'}).join("");
+  }
+
+  /* ---------- generated output ---------- */
+  function flag(r){
+    var cp=r.cp+(r.proto==="udp"?"/udp":"");
+    if(r.ip!=="0.0.0.0")return r.ip+":"+(r.random?"":r.hp)+":"+cp;
+    return r.random?cp:r.hp+":"+cp;
+  }
+  function renderOut(){
+    var t=state.tab,flat=state.flat,s="";
+    if(t==="run"){
+      s=state.cs.map(function(c){
+        var rows=flat.filter(function(r){return r.c===c});
+        var ok=rows.filter(function(r){return r.active});
+        var l="docker run -d --name "+cname(c);
+        ok.forEach(function(r){l+=" \\\n  -p "+flag(r)});
+        l+=" \\\n  "+(c.image||"image");
+        rows.filter(function(r){return !r.active}).forEach(function(r){l+="\n# übersprungen: "+r.err});
+        return l;
+      }).join("\n\n");
+    }else if(t==="compose"){
+      s="services:\n"+state.cs.map(function(c){
+        var ok=flat.filter(function(r){return r.c===c&&r.active});
+        var l="  "+cname(c)+":\n    image: "+(c.image||"image");
+        if(ok.length)l+="\n    ports:\n"+ok.map(function(r){return '      - "'+flag(r)+'"'}).join("\n");
+        return l;
+      }).join("\n");
+    }else if(t==="ps"){
+      var rowsT=state.cs.map(function(c){
+        var parts=[];
+        flat.filter(function(r){return r.c===c&&r.active}).forEach(function(r){
+          var base=r.ip+":"+r.hp+"->"+r.cp+"/"+r.proto;
+          parts.push(base);
+          if(r.ip==="0.0.0.0")parts.push("[::]:"+r.hp+"->"+r.cp+"/"+r.proto);
+        });
+        c.listens.forEach(function(l){
+          var pub=flat.some(function(r){return r.c===c&&r.active&&r.cp===l.p&&r.proto===l.proto});
+          if(!pub)parts.push(l.p+"/"+l.proto);
+        });
+        return [cname(c),c.image,parts.join(", ")];
+      });
+      var w0=Math.max(5,Math.max.apply(null,rowsT.map(function(r){return r[0].length}))),w1=Math.max(5,Math.max.apply(null,rowsT.map(function(r){return r[1].length})));
+      s="NAMES".padEnd(w0+2)+"IMAGE".padEnd(w1+2)+"PORTS\n"+rowsT.map(function(r){return r[0].padEnd(w0+2)+r[1].padEnd(w1+2)+r[2]}).join("\n");
+    }else{
+      s="$ sudo iptables -t nat -S DOCKER\n-N DOCKER\n-A DOCKER -i docker0 -j RETURN\n";
+      var act=flat.filter(function(r){return r.active});
+      s+=act.map(function(r){
+        return "-A DOCKER "+(r.ip==="0.0.0.0"?"":"-d "+r.ip+"/32 ")+"! -i docker0 -p "+r.proto+" -m "+r.proto+" --dport "+r.hp+" -j DNAT --to-destination "+r.c.ip+":"+r.cp;
+      }).join("\n");
+      if(!act.length)s+="# keine veröffentlichten Ports, daher keine DNAT-Regeln";
+    }
+    $("#out").textContent=s;
+  }
+
+  function refresh(opts){
+    derive();
+    if(!(opts&&opts.keepSim)){state.sim=null;state.anim++}
+    renderDiagram();renderOut();updateMsgs();buildSelects();
+  }
+
+  /* ---------- events ---------- */
+  var ed=$("#editor");
+  function ctx(e){
+    var cEl=e.target.closest("[data-c]"),mEl=e.target.closest("[data-m]");
+    var c=cEl&&byId(cEl.dataset.c),m=null;
+    if(c&&mEl)m=c.maps.filter(function(x){return x.id===+mEl.dataset.m})[0];
+    return {c:c,m:m};
+  }
+  function onEdit(e){
+    var x=ctx(e),el=e.target;if(!x.c)return;
+    if(el.classList.contains("name"))x.c.name=el.value;
+    else if(el.classList.contains("img"))x.c.image=el.value;
+    else if(el.classList.contains("listen"))x.c.listenStr=el.value;
+    else if(x.m){
+      if(el.classList.contains("ip"))x.m.ip=el.value;
+      else if(el.classList.contains("hp"))x.m.hp=el.value;
+      else if(el.classList.contains("cp"))x.m.cp=el.value;
+      else if(el.classList.contains("proto"))x.m.proto=el.value;
+    }else return;
+    refresh();
+  }
+  ed.addEventListener("input",onEdit);
+  ed.addEventListener("change",onEdit);
+  ed.addEventListener("click",function(e){
+    var b=e.target.closest("button");if(!b)return;
+    var x=ctx(e);if(!x.c)return;
+    if(b.classList.contains("addm")){x.c.maps.push({id:nextM++,ip:"0.0.0.0",hp:"",cp:"80",proto:"tcp"})}
+    else if(b.classList.contains("rmm")&&x.m){x.c.maps=x.c.maps.filter(function(m){return m!==x.m})}
+    else if(b.classList.contains("rmc")){state.cs=state.cs.filter(function(c){return c!==x.c})}
+    else return;
+    renderEditor();refresh();
+  });
+  $("#addC").onclick=function(){
+    if(state.cs.length>=6)return;
+    var names=["cache","worker","proxy","queue","mail","search"];
+    var used=state.cs.map(cname),n=names.filter(function(x){return used.indexOf(x)<0})[0]||"app"+nextC;
+    state.cs.push(mk(n,"alpine:3","8080",[]));
+    renderEditor();refresh();
+  };
+  $("#reset").onclick=function(){state.cs=defaults();log=[];renderLog();renderEditor();refresh();
+    $("#result").className="result idle";$("#result").textContent="Quelle und Ziel wählen, dann Senden drücken."};
+  $("#src").onchange=function(){fillDst($("#dst").value);state.sim=null;state.anim++;renderDiagram()};
+  $("#send").onclick=send;
+  $("#port").addEventListener("keydown",function(e){if(e.key==="Enter")send()});
+  $("#tabs").addEventListener("click",function(e){
+    var b=e.target.closest("button[data-t]");if(!b)return;
+    state.tab=b.dataset.t;
+    document.querySelectorAll("#tabs button[data-t]").forEach(function(x){x.setAttribute("aria-pressed",x===b?"true":"false")});
+    renderOut();
+  });
+  $("#copy").onclick=function(){
+    var btn=$("#copy");
+    try{
+      navigator.clipboard.writeText($("#out").textContent).then(function(){btn.textContent="Kopiert";setTimeout(function(){btn.textContent="Kopieren"},1200)},function(){btn.textContent="Kopieren fehlgeschlagen";setTimeout(function(){btn.textContent="Kopieren"},1200)});
+    }catch(err){btn.textContent="Kopieren fehlgeschlagen";setTimeout(function(){btn.textContent="Kopieren"},1200)}
+  };
+
+  renderEditor();buildPresets();refresh();
+  // Show a first result at rest so the diagram opens in a working state.
+  (function(){
+    derive();
+    var res=simulate("lan","hostip",8080,"tcp");
+    state.sim={res:res,done:true};
+    renderDiagram();
+    var r=$("#result");r.className="result "+(res.ok?"ok":"bad");
+    r.innerHTML="<strong>"+esc(res.title)+"</strong><div class='d'>"+esc(res.detail)+"</div>";
+    log.unshift({ok:res.ok,t:"LAN-Laptop ("+LAN_IP+") → Host "+HOST_IP+":8080/tcp"});renderLog();
+  })();
+})();
+</script>
+</body>
+</html>
